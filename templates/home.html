@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Customer Budget{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Resumo de Clientes</h5>
+                <p class="card-text">Total de clientes: {{ total_customers }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Orçamentos Pendentes</h5>
+                <p class="card-text">Orçamentos aguardando aprovação: {{ pending_quotes }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

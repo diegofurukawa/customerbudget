@@ -1,0 +1,66 @@
+from django import forms
+from .models import Customer, Material, Budget, BudgetItem
+
+class CustomerForm(forms.ModelForm):
+    class Meta:
+        model = Customer
+        fields = ['name', 'document', 'customer_type', 'birth_date', 'phone', 'email', 'address', 'address_complement', 'enabled']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'document': forms.TextInput(attrs={'class': 'form-control'}),
+            'customer_type': forms.Select(attrs={'class': 'form-control'}),
+            'birth_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'address': forms.TextInput(attrs={'class': 'form-control'}),
+            'address_complement': forms.TextInput(attrs={'class': 'form-control'}),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['customer_type'].widget = forms.RadioSelect(choices=Customer.PERSON_TYPE_CHOICES)
+        self.fields['customer_type'].initial = 1  # Define o valor padrão como 'Física'
+
+class MaterialForm(forms.ModelForm):
+    class Meta:
+        model = Material
+        fields = ['full_name', 'nick_name', 'description', 'cost_value', 'active']
+        widgets = {
+            'full_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'nick_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'cost_value': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+class CustomerSearchForm(forms.Form):
+    search = forms.CharField(required=False, label='Pesquisar Cliente')
+
+class BudgetForm(forms.ModelForm):
+    class Meta:
+        model = Budget
+        fields = ['customer', 'status']
+        widgets = {
+            'customer': forms.Select(attrs={'class': 'form-control'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+class BudgetItemForm(forms.ModelForm):
+    class Meta:
+        model = BudgetItem
+        fields = ['material', 'quantity']
+        widgets = {
+            'material': forms.Select(attrs={'class': 'form-control'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+BudgetItemFormSet = forms.inlineformset_factory(
+    Budget, BudgetItem, form=BudgetItemForm, extra=1, can_delete=True
+)
+
+BudgetItemFormSet = forms.inlineformset_factory(
+    Budget, BudgetItem, form=BudgetItemForm, extra=1, can_delete=True
+)

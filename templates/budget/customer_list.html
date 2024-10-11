@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes - Customer Budget{% endblock %}
+
+{% block page_title %}CLIENTES{% endblock %}
+
+{% block extra_css %}
+<style>
+    .btn-edit {
+        background-color: #FFA500;
+        border-color: #FFA500;
+        color: white;
+    }
+    .btn-edit:hover {
+        background-color: #FF8C00;
+        border-color: #FF8C00;
+        color: white;
+    }
+    .customer-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .search-container {
+        flex-grow: 1;
+        max-width: 500px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="customer-actions mb-3">
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerModal">NOVO CLIENTE</button>
+            <button id="editCustomerBtn" class="btn btn-edit" disabled>EDITAR CLIENTE</button>
+        </div>
+        <div class="search-container">
+            <div class="input-group">
+                <input type="text" id="searchInput" class="form-control" placeholder="Pesquisar por...">
+                <button class="btn btn-success" id="searchButton">PESQUISAR</button>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-secondary" disabled>EXPORTAR PARA EXCEL</button>
+            <span class="btn btn-light">TOTAL: {{ customers.count }} cliente(s)</span>
+        </div>
+    </div>
+
+    <!-- Modal para Novo/Editar Cliente -->
+    <div class="modal fade" id="customerModal" tabindex="-1" aria-labelledby="customerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="customerModalLabel">CADASTRO DE CLIENTES</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="customerForm" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" id="customer_id" name="customer_id">
+                        <div class="mb-3">
+                            <label for="id_name" class="form-label">Nome*</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_document" class="form-label">Documento</label>
+                            {{ form.document }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Cliente*</label>
+                            <div class="d-flex">
+                                {% for radio in form.customer_type %}
+                                    <div class="form-check me-3">
+                                        {{ radio.tag }}
+                                        <label class="form-check-label" for="{{ radio.id_for_label }}">
+                                            {{ radio.choice_label }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_birth_date" class="form-label">Data de Nascimento</label>
+                            {{ form.birth_date }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_phone" class="form-label">Celular*</label>
+                            {{ form.phone }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_email" class="form-label">Email</label>
+                            {{ form.email }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_address" class="form-label">Endereço</label>
+                            {{ form.address }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_address_complement" class="form-label">Complemento</label>
+                            {{ form.address_complement }}
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-success">SALVAR</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">CANCELAR</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Clientes -->
+    <table class="table" id="customerTable">
+        <thead>
+            <tr>
+                <th><input type="checkbox" id="selectAll"></th>
+                <th>Nome</th>
+                <th>Documento</th>
+                <th>Tipo</th>
+                <th>Email</th>
+                <th>Telefone</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for customer in customers %}
+            <tr>
+                <td><input type="checkbox" class="customer-select" data-id="{{ customer.id }}"></td>
+                <td>{{ customer.name }}</td>
+                <td>{{ customer.document }}</td>
+                <td>{{ customer.get_customer_type_display }}</td>
+                <td>{{ customer.email }}</td>
+                <td>{{ customer.phone }}</td>
+                <td>
+                    <button class="btn btn-edit btn-sm edit-customer" data-id="{{ customer.id }}">Editar</button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7">Nenhum cliente cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const customerTable = document.getElementById('customerTable');
+        const selectAll = document.getElementById('selectAll');
+        const editCustomerBtn = document.getElementById('editCustomerBtn');
+        const customerModal = new bootstrap.Modal(document.getElementById('customerModal'));
+        const customerForm = document.getElementById('customerForm');
+
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const rows = customerTable.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                const name = rows[i].getElementsByTagName('td')[1].textContent.toLowerCase();
+                const document = rows[i].getElementsByTagName('td')[2].textContent.toLowerCase();
+                const email = rows[i].getElementsByTagName('td')[4].textContent.toLowerCase();
+                if (name.includes(searchTerm) || document.includes(searchTerm) || email.includes(searchTerm)) {
+                    rows[i].style.display = '';
+                } else {
+                    rows[i].style.display = 'none';
+                }
+            }
+        }
+
+        searchButton.addEventListener('click', performSearch);
+        searchInput.addEventListener('keyup', function(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        selectAll.addEventListener('change', function() {
+            const checkboxes = document.getElementsByClassName('customer-select');
+            for (let checkbox of checkboxes) {
+                checkbox.checked = selectAll.checked;
+            }
+            updateEditButton();
+        });
+
+        document.querySelectorAll('.customer-select').forEach(checkbox => {
+            checkbox.addEventListener('change', updateEditButton);
+        });
+
+        function updateEditButton() {
+            const selectedCustomers = document.querySelectorAll('.customer-select:checked');
+            editCustomerBtn.disabled = selectedCustomers.length !== 1;
+        }
+
+        editCustomerBtn.addEventListener('click', function() {
+            const selectedCustomer = document.querySelector('.customer-select:checked');
+            if (selectedCustomer) {
+                const customerId = selectedCustomer.getAttribute('data-id');
+                editCustomer(customerId);
+            }
+        });
+
+        document.querySelectorAll('.edit-customer').forEach(button => {
+            button.addEventListener('click', function() {
+                const customerId = this.getAttribute('data-id');
+                editCustomer(customerId);
+            });
+        });
+
+        function editCustomer(customerId) {
+            fetch(`/customers/${customerId}/data/`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('customer_id').value = data.id;
+                    document.getElementById('id_name').value = data.name;
+                    document.getElementById('id_document').value = data.document;
+                    document.querySelector(`input[name="customer_type"][value="${data.customer_type}"]`).checked = true;
+                    document.getElementById('id_birth_date').value = data.birth_date;
+                    document.getElementById('id_phone').value = data.phone;
+                    document.getElementById('id_email').value = data.email;
+                    document.getElementById('id_address').value = data.address;
+                    document.getElementById('id_address_complement').value = data.address_complement;
+
+                    document.getElementById('customerModalLabel').textContent = 'Editar Cliente';
+                    customerModal.show();
+                })
+                .catch(error => console.error('Erro ao carregar dados do cliente:', error));
+        }
+
+        customerForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(customerForm);
+            fetch('/customers/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    customerModal.hide();
+                    location.reload(); // Recarrega a página para mostrar as alterações
+                } else {
+                    // Mostra erros de validação
+                    Object.keys(data.errors).forEach(key => {
+                        const field = document.getElementById(`id_${key}`);
+                        field.classList.add('is-invalid');
+                        const feedback = field.nextElementSibling || document.createElement('div');
+                        feedback.className = 'invalid-feedback';
+                        feedback.textContent = data.errors[key].join(', ');
+                        if (!field.nextElementSibling) {
+                            field.parentNode.appendChild(feedback);
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Erro ao salvar cliente:', error));
+        });
+
+        // Limpa o formulário e reseta o título ao abrir o modal para novo cliente
+        document.querySelector('[data-bs-target="#customerModal"]').addEventListener('click', function() {
+            customerForm.reset();
+            document.getElementById('customer_id').value = '';
+            document.getElementById('customerModalLabel').textContent = 'Novo Cliente';
+        });
+    });
+</script>
+{% endblock %}
