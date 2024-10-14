@@ -2,68 +2,55 @@
 
 {% block title %}Lista de Orçamentos{% endblock %}
 
-{% block page_title %}ORÇAMENTOS{% endblock %}
+{% block page_title %}LISTA DE ORÇAMENTOS{% endblock %}
 
 {% block content %}
-<div class="mb-3">
-    <a href="{% url 'budget_create' %}" class="btn btn-primary">Novo Orçamento</a>
-</div>
-
-<table class="table">
-    <thead>
-        <tr>
-            <th><a href="?order_by={% if order_by == 'id' %}-{% endif %}id">ID</a></th>
-            <th><a href="?order_by={% if order_by == 'customer__name' %}-{% endif %}customer__name">Cliente</a></th>
-            <th><a href="?order_by={% if order_by == 'created_at' %}-{% endif %}created_at">Data de Criação</a></th>
-            <th><a href="?order_by={% if order_by == 'status' %}-{% endif %}status">Status</a></th>
-            <th><a href="?order_by={% if order_by == 'total_cost' %}-{% endif %}total_cost">Custo Total</a></th>
-            <th>Ações</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for budget in budgets %}
-        <tr>
-            <td>{{ budget.id }}</td>
-            <td>{{ budget.customer.name }}</td>
-            <td>{{ budget.created_at|date:"d/m/Y H:i" }}</td>
-            <td>{{ budget.get_status_display }}</td>
-            <td>R$ {{ budget.total_cost|floatformat:2 }}</td>
-            <td>
-                {% if budget.status == 'CREATED' %}
-                    <a href="{% url 'budget_edit' budget.pk %}" class="btn btn-sm btn-warning">Editar</a>
-                {% endif %}
-                <a href="#" class="btn btn-sm btn-info">Visualizar</a>
-            </td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="6">Nenhum orçamento encontrado.</td>
-        </tr>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
         {% endfor %}
-    </tbody>
-</table>
+    {% endif %}
 
-{% if is_paginated %}
-<nav aria-label="Page navigation">
-    <ul class="pagination">
-        {% if page_obj.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page=1&order_by={{ order_by }}">&laquo; Primeira</a></li>
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&order_by={{ order_by }}">Anterior</a></li>
-        {% endif %}
+    <a href="{% url 'budget_create' %}" class="btn btn-primary mb-3">Novo Orçamento</a>
 
-        {% for num in page_obj.paginator.page_range %}
-            {% if page_obj.number == num %}
-                <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
-            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                <li class="page-item"><a class="page-link" href="?page={{ num }}&order_by={{ order_by }}">{{ num }}</a></li>
-            {% endif %}
-        {% endfor %}
-
-        {% if page_obj.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&order_by={{ order_by }}">Próxima</a></li>
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&order_by={{ order_by }}">Última &raquo;</a></li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Data de Criação</th>
+                <th>Status</th>
+                <th>Custo Total</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for budget in budgets %}
+                <tr>
+                    <td>{{ budget.id }}</td>
+                    <td>{{ budget.customer.name }}</td>
+                    <td>{{ budget.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ budget.get_status_display }}</td>
+                    <td>R$ {{ budget.total_cost|floatformat:2 }}</td>
+                    <td>
+                        {% if budget.status != 'CANCELED' %}
+                        <a href="{% url 'budget_edit' budget.id %}" class="btn btn-warning btn-sm">Editar</a>
+                        {% endif %}
+                        <a href="{% url 'budget_pdf_preview' budget.id %}" class="btn btn-info btn-sm" target="_blank">Visualizar PDF</a>
+                        <a href="{% url 'budget_pdf' budget.id %}" class="btn btn-primary btn-sm">Baixar PDF</a>
+                        {% if budget.status == 'CREATED' %}
+                        <button class="btn btn-danger btn-sm">Cancelar</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">Nenhum orçamento encontrado.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 {% endblock %}

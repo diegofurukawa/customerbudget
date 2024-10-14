@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Customer Budget{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .dashboard-card h3 {
+        margin-top: 0;
+        color: #333;
+    }
+    .dashboard-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #007bff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>Dashboard</h2>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <h3>Orçamentos Criados (Último Mês)</h3>
+            <p>Quantidade: <span class="dashboard-value">{{ created_count }}</span></p>
+            <p>Valor Total: <span class="dashboard-value">R$ {{ created_total|floatformat:2 }}</span></p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <h3>Orçamentos Aceitos (Último Mês)</h3>
+            <p>Quantidade: <span class="dashboard-value">{{ accepted_count }}</span></p>
+            <p>Valor Total: <span class="dashboard-value">R$ {{ accepted_total|floatformat:2 }}</span></p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <h3>Total Faturado (Último Mês)</h3>
+            <p>Valor: <span class="dashboard-value">R$ {{ faturado_total|floatformat:2 }}</span></p>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-card">
+    <h3>Comparação de Orçamentos</h3>
+    <canvas id="budgetComparisonChart"></canvas>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var ctx = document.getElementById('budgetComparisonChart').getContext('2d');
+    var timeSeriesData = {{ time_series_data|safe }};
+    
+    var dates = timeSeriesData.base.map(item => item.date);
+    
+    var datasets = [
+        {
+            label: 'Total',
+            data: timeSeriesData.base.map(item => item.count),
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1
+        }
+    ];
+    
+    var statusColors = {
+        'PENDING': 'rgb(255, 205, 86)',
+        'SENT': 'rgb(54, 162, 235)',
+        'ACCEPTED': 'rgb(255, 99, 132)',
+        'SERVICE_ORDER': 'rgb(153, 102, 255)',
+        'SCHEDULED': 'rgb(201, 203, 207)'
+    };
+    
+    Object.entries(timeSeriesData.status_series).forEach(([status, data]) => {
+        datasets.push({
+            label: status,
+            data: dates.map(date => {
+                var matchingItem = data.find(item => item.date === date);
+                return matchingItem ? matchingItem.count : 0;
+            }),
+            borderColor: statusColors[status],
+            tension: 0.1
+        });
+    });
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'day'
+                    }
+                },
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

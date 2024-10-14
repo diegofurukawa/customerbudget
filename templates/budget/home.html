@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Página Inicial - Sistema de Orçamentos{% endblock %}
+
+{% block page_title %}Bem-vindo ao Sistema de Orçamentos{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Sistema de Orçamentos</h1>
+    <p class="lead">Gerencie seus orçamentos, clientes e materiais de forma eficiente.</p>
+    <hr class="my-4">
+    <p>Escolha uma opção abaixo para começar:</p>
+    <a class="btn btn-primary btn-lg" href="{% url 'budget_list' %}" role="button">Ver Orçamentos</a>
+    <a class="btn btn-secondary btn-lg" href="{% url 'customer_list' %}" role="button">Gerenciar Clientes</a>
+</div>
+{% endblock %}

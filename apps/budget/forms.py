@@ -47,6 +47,13 @@ class BudgetForm(forms.ModelForm):
             'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
+BudgetItemFormSet = forms.inlineformset_factory(
+    Budget, BudgetItem,
+    fields=['material', 'quantity'],
+    extra=1,
+    can_delete=True
+)
+
 class BudgetItemForm(forms.ModelForm):
     class Meta:
         model = BudgetItem

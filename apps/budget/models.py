@@ -63,16 +63,23 @@ class Material(models.Model):
 class Budget(models.Model):
     STATUS_CHOICES = (
         ('CREATED', 'Criado'),
-        ('PENDING', 'Pendente Envio'),
-        ('ACCEPTED', 'Aceito'),
         ('CANCELED', 'Cancelado'),
-        ('SERVICE_ORDER', 'Ordem Serviço'),
+        ('PENDING', 'Pendente Envio'),
+        ('SENT', 'Enviado'),
+        ('ACCEPTED', 'Aceito'),
+        ('SERVICE_ORDER', 'Ordem de Serviço'),
+        ('SCHEDULED', 'Agendado'),
     )
     
-    customer = models.ForeignKey('Customer', on_delete=models.CASCADE, related_name='budgets')
-    created_at = models.DateTimeField(auto_now_add=True)
+    customer = models.ForeignKey('Customer', on_delete=models.CASCADE)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CREATED')
+    created_at = models.DateTimeField(auto_now_add=True)
     enabled = models.BooleanField(default=True, verbose_name="Ativo")
+    installation_date = models.DateField(null=True, blank=True)  # Adicionando o campo installation_date
+    
+    def get_status_display(self):
+        return dict(self.STATUS_CHOICES)[self.status]
+    
     def calculate_total_cost(self):
         return self.items.aggregate(
             total=Sum(F('quantity') * F('material__cost_value'))
@@ -86,6 +93,7 @@ class BudgetItem(models.Model):
     material = models.ForeignKey('Material', on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=7, decimal_places=2, validators=[MinValueValidator(0.01)])
     enabled = models.BooleanField(default=True)  # Novo campo
+    installation_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.material.full_name} - {self.quantity}"

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Orçamentos Aguardando Aceite</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Cliente</th>
+            <th>Data de Criação</th>
+            <th>Valor Total</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for budget in budgets %}
+        <tr>
+            <td>{{ budget.customer.name }}</td>
+            <td>{{ budget.created_at|date:"d/m/Y H:i" }}</td>
+            <td>R$ {{ budget.total_value|floatformat:2 }}</td>
+            <td>
+                <a href="{% url 'budget_pdf_preview' budget.id %}" class="btn btn-info btn-sm" target="_blank">Visualizar PDF</a>
+                <a href="{% url 'budget_pdf' budget.id %}" class="btn btn-primary btn-sm">Baixar PDF</a>
+                <button class="btn btn-warning btn-sm generate-order" data-budget-id="{{ budget.id }}">Gerar Ordem</button>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">Nenhum orçamento aguardando aceite.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const generateOrderButtons = document.querySelectorAll('.generate-order');
+        generateOrderButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const budgetId = this.getAttribute('data-budget-id');
+                if (confirm('Deseja gerar uma ordem de serviço para este orçamento?')) {
+                    fetch('{% url "awaiting_acceptance" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: `budget_id=${budgetId}&action=generate_order`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.closest('tr').remove();
+                        } else {
+                            alert('Erro ao gerar ordem de serviço');
+                        }
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

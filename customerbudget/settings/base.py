@@ -1,7 +1,33 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+import sys
 
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv()
+
+# Configurações da empresa
+COMPANY_NAME = os.getenv('COMPANY_NAME')
+DOCUMENT_TYPE = os.getenv('DOCUMENT_TYPE')
+DOCUMENT_NUMBER = os.getenv('DOCUMENT_NUMBER')
+RESPONSIBLE = os.getenv('RESPONSIBLE')
+CONTACT = os.getenv('CONTACT')
+ADDRESS = os.getenv('ADDRESS')
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Adicione a pasta 'apps' ao Python path
+sys.path.insert(0, str(BASE_DIR / 'apps'))
+# ... outras configurações ...
+
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Adicione esta configuração para o diretório de mídia
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 SECRET_KEY = 'your-secret-key-here'
 

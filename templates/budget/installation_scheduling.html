@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Agendamento de Instalação</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Cliente</th>
+            <th>Data de Criação</th>
+            <th>Valor Total</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for budget in budgets %}
+        <tr>
+            <td>{{ budget.customer.name }}</td>
+            <td>{{ budget.created_at|date:"d/m/Y H:i" }}</td>
+            <td>R$ {{ budget.total_value|floatformat:2 }}</td>
+            <td>
+                <a href="{% url 'budget_pdf_preview' budget.id %}" class="btn btn-info btn-sm" target="_blank">Visualizar PDF</a>
+                <a href="{% url 'budget_pdf' budget.id %}" class="btn btn-primary btn-sm">Baixar PDF</a>
+                <button class="btn btn-success btn-sm schedule-installation" data-budget-id="{{ budget.id }}">Agendar</button>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">Nenhuma ordem de serviço para agendar.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Modal para agendamento -->
+<div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="scheduleModalLabel">Agendar Instalação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <div class="mb-3">
+                        <label for="installation_date" class="form-label">Data de Instalação</label>
+                        <input type="date" class="form-control" id="installation_date" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="confirmSchedule">Confirmar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const scheduleButtons = document.querySelectorAll('.schedule-installation');
+        const scheduleModal = new bootstrap.Modal(document.getElementById('scheduleModal'));
+        let currentBudgetId;
+
+        scheduleButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                currentBudgetId = this.getAttribute('data-budget-id');
+                scheduleModal.show();
+            });
+        });
+
+        document.getElementById('confirmSchedule').addEventListener('click', function() {
+            const installationDate = document.getElementById('installation_date').value;
+            if (installationDate) {
+                fetch('{% url "installation_scheduling" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: `budget_id=${currentBudgetId}&installation_date=${installationDate}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        scheduleModal.hide();
+                        document.querySelector(`[data-budget-id="${currentBudgetId}"]`).closest('tr').remove();
+                    } else {
+                        alert('Erro ao agendar instalação: ' + data.error);
+                    }
+                });
+            } else {
+                alert('Por favor, selecione uma data de instalação.');
+            }
+        });
+    });
+</script>
+{% endblock %}

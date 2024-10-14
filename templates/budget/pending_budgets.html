@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Orçamentos Pendentes de Envio</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Cliente</th>
+            <th>Data de Criação</th>
+            <th>Valor Total</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for budget in budgets %}
+        <tr>
+            <td>{{ budget.customer.name }}</td>
+            <td>{{ budget.created_at|date:"d/m/Y H:i" }}</td>
+            <td>R$ {{ budget.total_value|floatformat:2 }}</td>
+            <td>
+                <a href="{% url 'budget_pdf_preview' budget.id %}" class="btn btn-info btn-sm" target="_blank">Visualizar PDF</a>
+                <a href="{% url 'budget_pdf' budget.id %}" class="btn btn-primary btn-sm">Baixar PDF</a>
+                <button class="btn btn-warning btn-sm mark-sent" data-budget-id="{{ budget.id }}">Enviar</button>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">Nenhum orçamento pendente de envio.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const markSentButtons = document.querySelectorAll('.mark-sent');
+        markSentButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const budgetId = this.getAttribute('data-budget-id');
+                if (confirm('Confirmar que este orçamento foi enviado?')) {
+                    fetch('{% url "pending_budgets" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: `budget_id=${budgetId}&action=mark_sent`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.closest('tr').remove();
+                        } else {
+                            alert('Erro ao marcar orçamento como enviado');
+                        }
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
