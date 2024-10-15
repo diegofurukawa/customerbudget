@@ -2,7 +2,7 @@
 
 {% block title %}Lista de Orçamentos{% endblock %}
 
-{% block page_title %}LISTA DE ORÇAMENTOS{% endblock %}
+{% block page_title %}Lista de Orçamentos{% endblock %}
 
 {% block content %}
     {% if messages %}
@@ -14,7 +14,7 @@
         {% endfor %}
     {% endif %}
 
-    <a href="{% url 'budget_create' %}" class="btn btn-primary mb-3">Novo Orçamento</a>
+    <a href="{% url 'budget_create' %}" class="btn btn-primary mb-3">+ Novo Orçamento</a>
 
     <table class="table">
         <thead>
@@ -34,7 +34,7 @@
                     <td>{{ budget.customer.name }}</td>
                     <td>{{ budget.created_at|date:"d/m/Y H:i" }}</td>
                     <td>{{ budget.get_status_display }}</td>
-                    <td>R$ {{ budget.total_cost|floatformat:2 }}</td>
+                    <td>R$ {{ budget.total_value|floatformat:2 }}</td>
                     <td>
                         {% if budget.status != 'CANCELED' %}
                         <a href="{% url 'budget_edit' budget.id %}" class="btn btn-warning btn-sm">Editar</a>

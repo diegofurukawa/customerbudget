@@ -32,17 +32,23 @@
 
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav">
-
+                        <!-- Dashboard 
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
                                 Dashboard
                             </a>
                         </li>
+                        -->
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'customer_list' %}active{% endif %}" href="{% url 'customer_list' %}">
                                 Clientes
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'tax_list' %}active{% endif %}" href="{% url 'tax_list' %}">
+                                Taxas & Impostos
+                            </a>
+                        </li>                
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'material_list' %}active{% endif %}" href="{% url 'material_list' %}">
                                 Material
@@ -72,7 +78,8 @@
                             <a class="nav-link {% if request.resolver_match.url_name == 'installations' %}active{% endif %}" href="{% url 'installations' %}">
                                 Instalações
                             </a>
-                        </li>                        
+                        </li>  
+                        <!-- Dashboard                      
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'cadastros_gerais' %}active{% endif %}" href="{% url 'cadastros_gerais' %}">
                                 Cadastros Gerais
@@ -83,7 +90,7 @@
                                 Usuários
                             </a>
                         </li>
-
+                    -->
                     </ul>
                 </div>
 

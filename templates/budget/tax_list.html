@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block title %}Taxas e Impostos - Customer Budget{% endblock %}
+
+{% block page_title %}Taxas e Impostos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .btn-edit {
+        background-color: #FFA500;
+        border-color: #FFA500;
+        color: white;
+    }
+    .btn-edit:hover {
+        background-color: #FF8C00;
+        border-color: #FF8C00;
+        color: white;
+    }
+    .tax-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .search-container {
+        flex-grow: 1;
+        max-width: 500px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="tax-actions mb-3">
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#taxModal">+ Novo(a) Taxa/Imposto</button>
+            <button id="editTaxBtn" class="btn btn-edit" disabled>Editar Taxa/Imposto</button>
+        </div>
+        <div class="search-container">
+            <div class="input-group">
+                <input type="text" id="searchInput" class="form-control" placeholder="Pesquisar por...">
+                <button class="btn btn-success" id="searchButton">Pesquisar</button>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-secondary" disabled>Exportar para Excel</button>
+            <span class="btn btn-light">TOTAL: {{ taxes.count }} taxa(s)/imposto(s)</span>
+        </div>
+    </div>
+
+    <!-- Modal para Nova/Editar Taxa/Imposto -->
+    <div class="modal fade" id="taxModal" tabindex="-1" aria-labelledby="taxModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taxModalLabel">CADASTRO DE TAXAS E IMPOSTOS</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="taxForm" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" id="tax_id" name="tax_id">
+                        {{ form.as_p }}
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-success">SALVAR</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">CANCELAR</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Taxas e Impostos -->
+    <table class="table" id="taxTable">
+        <thead>
+            <tr>
+                <th><input type="checkbox" id="selectAll"></th>
+                <th>Descrição</th>
+                <th>Tipo</th>
+                <th>Sigla</th>
+                <th>Grupo</th>
+                <th>Operador</th>
+                <th>Valor</th>
+                <th>Ativo</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tax in taxes %}
+            <tr>
+                <td><input type="checkbox" class="tax-select" data-id="{{ tax.id }}"></td>
+                <td>{{ tax.description }}</td>
+                <td>{{ tax.get_type_display }}</td>
+                <td>{{ tax.acronym }}</td>
+                <td>{{ tax.get_group_display }}</td>
+                <td>{{ tax.get_calc_operator_display }}</td>
+                <td>{{ tax.value }}</td>
+                <td>{{ tax.enabled|yesno:"Sim,Não" }}</td>
+                <td>
+                    <button class="btn btn-edit btn-sm edit-tax" data-id="{{ tax.id }}">Editar</button>
+                    <a href="{% url 'tax_delete' tax.id %}" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir esta taxa/imposto?')">Excluir</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9">Nenhuma taxa/imposto cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const taxTable = document.getElementById('taxTable');
+        const selectAll = document.getElementById('selectAll');
+        const editTaxBtn = document.getElementById('editTaxBtn');
+        const taxModal = new bootstrap.Modal(document.getElementById('taxModal'));
+        const taxForm = document.getElementById('taxForm');
+
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const rows = taxTable.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                const description = rows[i].getElementsByTagName('td')[1].textContent.toLowerCase();
+                const acronym = rows[i].getElementsByTagName('td')[3].textContent.toLowerCase();
+                if (description.includes(searchTerm) || acronym.includes(searchTerm)) {
+                    rows[i].style.display = '';
+                } else {
+                    rows[i].style.display = 'none';
+                }
+            }
+        }
+
+        searchButton.addEventListener('click', performSearch);
+        searchInput.addEventListener('keyup', function(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        selectAll.addEventListener('change', function() {
+            const checkboxes = document.getElementsByClassName('tax-select');
+            for (let checkbox of checkboxes) {
+                checkbox.checked = selectAll.checked;
+            }
+            updateEditButton();
+        });
+
+        document.querySelectorAll('.tax-select').forEach(checkbox => {
+            checkbox.addEventListener('change', updateEditButton);
+        });
+
+        function updateEditButton() {
+            const selectedTaxes = document.querySelectorAll('.tax-select:checked');
+            editTaxBtn.disabled = selectedTaxes.length !== 1;
+        }
+
+        editTaxBtn.addEventListener('click', function() {
+            const selectedTax = document.querySelector('.tax-select:checked');
+            if (selectedTax) {
+                const taxId = selectedTax.getAttribute('data-id');
+                editTax(taxId);
+            }
+        });
+
+        document.querySelectorAll('.edit-tax').forEach(button => {
+            button.addEventListener('click', function() {
+                const taxId = this.getAttribute('data-id');
+                editTax(taxId);
+            });
+        });
+
+        function editTax(taxId) {
+            fetch(`/taxes/${taxId}/update/`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('tax_id').value = data.id;
+                    document.getElementById('id_description').value = data.description;
+                    document.getElementById('id_type').value = data.type;
+                    document.getElementById('id_acronym').value = data.acronym;
+                    document.getElementById('id_group').value = data.group;
+                    document.getElementById('id_calc_operator').value = data.calc_operator;
+                    document.getElementById('id_value').value = data.value;
+                    document.getElementById('id_enabled').checked = data.enabled;
+
+                    document.getElementById('taxModalLabel').textContent = 'Editar Taxa/Imposto';
+                    taxModal.show();
+                })
+                .catch(error => console.error('Erro ao carregar dados da taxa/imposto:', error));
+        }
+
+        taxForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(taxForm);
+            const taxId = document.getElementById('tax_id').value;
+            const url = taxId ? `/taxes/${taxId}/update/` : '/taxes/create/';
+
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    taxModal.hide();
+                    location.reload(); // Recarrega a página para mostrar as alterações
+                } else {
+                    // Mostra erros de validação
+                    Object.keys(data.errors).forEach(key => {
+                        const field = document.getElementById(`id_${key}`);
+                        field.classList.add('is-invalid');
+                        const feedback = field.nextElementSibling || document.createElement('div');
+                        feedback.className = 'invalid-feedback';
+                        feedback.textContent = data.errors[key].join(', ');
+                        if (!field.nextElementSibling) {
+                            field.parentNode.appendChild(feedback);
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Erro ao salvar taxa/imposto:', error));
+        });
+
+        // Limpa o formulário e reseta o título ao abrir o modal para nova taxa/imposto
+        document.querySelector('[data-bs-target="#taxModal"]').addEventListener('click', function() {
+            taxForm.reset();
+            document.getElementById('tax_id').value = '';
+            document.getElementById('taxModalLabel').textContent = 'Nova Taxa/Imposto';
+        });
+    });
+</script>
+{% endblock %}

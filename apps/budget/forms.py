@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer, Material, Budget, BudgetItem
+from .models import Customer, Material, Budget, BudgetItem, Tax
 
 class CustomerForm(forms.ModelForm):
     class Meta:
@@ -71,3 +71,17 @@ BudgetItemFormSet = forms.inlineformset_factory(
 BudgetItemFormSet = forms.inlineformset_factory(
     Budget, BudgetItem, form=BudgetItemForm, extra=1, can_delete=True
 )
+
+class TaxForm(forms.ModelForm):
+    class Meta:
+        model = Tax
+        fields = ['description', 'type', 'acronym', 'group', 'calc_operator', 'value', 'enabled']
+        widgets = {
+            'description': forms.TextInput(attrs={'class': 'form-control'}),
+            'type': forms.Select(attrs={'class': 'form-control'}),
+            'acronym': forms.TextInput(attrs={'class': 'form-control'}),
+            'group': forms.Select(attrs={'class': 'form-control'}),
+            'calc_operator': forms.Select(attrs={'class': 'form-control'}),
+            'value': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0001'}),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }

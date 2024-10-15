@@ -97,3 +97,40 @@ class BudgetItem(models.Model):
 
     def __str__(self):
         return f"{self.material.full_name} - {self.quantity}"
+    
+
+
+class Tax(models.Model):
+    TYPE_CHOICES = [
+        ('tax', 'Imposto'),
+        ('fee', 'Taxa'),
+    ]
+    GROUP_CHOICES = [
+        ('federal', 'Federal'),
+        ('state', 'Estadual'),
+        ('municipal', 'Municipal'),
+        ('other', 'Outro'),
+    ]
+    OPERATOR_CHOICES = [
+        ('+', 'Adição'),
+        ('-', 'Subtração'),
+        ('*', 'Multiplicação'),
+        ('/', 'Divisão'),
+    ]
+
+    description = models.CharField(max_length=100, verbose_name="Descrição")
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES, verbose_name="Tipo")
+    acronym = models.CharField(max_length=10, verbose_name="Sigla")
+    group = models.CharField(max_length=20, choices=GROUP_CHOICES, verbose_name="Grupo")
+    calc_operator = models.CharField(max_length=1, choices=OPERATOR_CHOICES, verbose_name="Operador")
+    value = models.DecimalField(max_digits=10, decimal_places=4, verbose_name="Valor")
+    enabled = models.BooleanField(default=True, verbose_name="Ativo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.description} ({self.acronym})"
+
+    class Meta:
+        verbose_name = "Taxa/Imposto"
+        verbose_name_plural = "Taxas e Impostos"

@@ -2,8 +2,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Q, Sum, F, FloatField, Count
 from django.http import JsonResponse, HttpResponse
-from .models import Customer, Material
-from .forms import CustomerForm, MaterialForm, BudgetForm, BudgetItemFormSet, Budget, CustomerSearchForm
+from .models import Customer, Material, Tax
+from .forms import CustomerForm, MaterialForm, BudgetForm, BudgetItemFormSet, Budget, CustomerSearchForm, TaxForm
 from .models import Budget, Customer, Material, BudgetItem
 from django.views.generic import ListView, View
 from django.db.models.functions import Coalesce, TruncDate
@@ -668,3 +668,47 @@ def budget_edit(request, pk):
 
 class HomeView(TemplateView):
     template_name = 'home.html'
+
+
+def tax_list(request):
+    taxes = Tax.objects.all()
+    form = TaxForm()
+    return render(request, 'budget/tax_list.html', {'taxes': taxes, 'form': form})
+
+def tax_create(request):
+    if request.method == 'POST':
+        form = TaxForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse({'success': False, 'errors': form.errors})
+    return JsonResponse({'success': False, 'errors': 'Invalid request method'})
+
+def tax_update(request, pk):
+    tax = get_object_or_404(Tax, pk=pk)
+    if request.method == 'POST':
+        form = TaxForm(request.POST, instance=tax)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse({'success': False, 'errors': form.errors})
+    elif request.method == 'GET':
+        return JsonResponse({
+            'id': tax.id,
+            'description': tax.description,
+            'type': tax.type,
+            'acronym': tax.acronym,
+            'group': tax.group,
+            'calc_operator': tax.calc_operator,
+            'value': str(tax.value),
+            'enabled': tax.enabled,
+        })
+    return JsonResponse({'success': False, 'errors': 'Invalid request method'})
+
+def tax_delete(request, pk):
+    tax = get_object_or_404(Tax, pk=pk)
+    tax.delete()
+    messages.success(request, 'Taxa/Imposto excluído com sucesso.')
+    return redirect('tax_list')
