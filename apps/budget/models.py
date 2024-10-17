@@ -122,7 +122,15 @@ class Tax(models.Model):
     type = models.CharField(max_length=10, choices=TYPE_CHOICES, verbose_name="Tipo")
     acronym = models.CharField(max_length=10, verbose_name="Sigla")
     group = models.CharField(max_length=20, choices=GROUP_CHOICES, verbose_name="Grupo")
-    calc_operator = models.CharField(max_length=1, choices=OPERATOR_CHOICES, verbose_name="Operador")
+    calc_operator = models.CharField(max_length=1, choices=[
+        ('%', 'Percentual'),
+        ('0', 'Fixo'),
+        ('+', 'Adição'),
+        ('-', 'Subtração'),
+        ('*', 'Multiplicação'),
+        ('/', 'Divisão'),
+        
+    ], default='%')
     value = models.DecimalField(max_digits=10, decimal_places=4, verbose_name="Valor")
     enabled = models.BooleanField(default=True, verbose_name="Ativo")
     created_at = models.DateTimeField(auto_now_add=True)
