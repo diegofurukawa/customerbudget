@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Customer, Budget, BudgetItem, Material
+from .models import Customer, Budget, BudgetItem, Material, MaterialPrice
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
@@ -25,6 +25,17 @@ class BudgetItemAdmin(admin.ModelAdmin):
 
 @admin.register(Material)
 class MaterialAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'nick_name', 'cost_value', 'active')
+    list_display = ('full_name', 'nick_name', 'ean_code', 'active', 'current_price')
     list_filter = ('active',)
-    search_fields = ('full_name', 'nick_name')
+    search_fields = ('full_name', 'nick_name', 'ean_code')
+
+    def current_price(self, obj):
+        return f"R$ {obj.get_current_price():.2f}"
+    current_price.short_description = "Preço Atual"
+
+
+@admin.register(MaterialPrice)
+class MaterialPriceAdmin(admin.ModelAdmin):
+    list_display = ('material', 'total_value', 'start_date', 'end_date', 'active')
+    list_filter = ('active', 'start_date', 'end_date')
+    search_fields = ('material__full_name',)

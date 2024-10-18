@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer, Material, Budget, BudgetItem, Tax
+from .models import Customer, Material, Budget, BudgetItem, Tax, Price_List
 
 class CustomerForm(forms.ModelForm):
     class Meta:
@@ -25,12 +25,12 @@ class CustomerForm(forms.ModelForm):
 class MaterialForm(forms.ModelForm):
     class Meta:
         model = Material
-        fields = ['full_name', 'nick_name', 'description', 'cost_value', 'active']
+        fields = ['full_name', 'nick_name', 'description', 'ean_code', 'active']
         widgets = {
             'full_name': forms.TextInput(attrs={'class': 'form-control'}),
             'nick_name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'cost_value': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'ean_code': forms.TextInput(attrs={'class': 'form-control'}),
             'active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
@@ -84,4 +84,13 @@ class TaxForm(forms.ModelForm):
             'calc_operator': forms.Select(attrs={'class': 'form-control'}),
             'value': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0001'}),
             'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+class PriceListForm(forms.ModelForm):
+    class Meta:
+        model = Price_List
+        fields = ['material', 'value', 'tax', 'type_tax', 'start_date', 'end_date', 'active']
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'type': 'date'}),
         }

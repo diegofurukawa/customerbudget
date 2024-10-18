@@ -8,7 +8,9 @@ from apps.budget.views import (
     ,generate_budget_pdf, BudgetPDFPreviewView, PendingBudgetsView
     ,AwaitingAcceptanceView, InstallationSchedulingView, InstallationsView
     ,DashboardView, HomeView, 
-    tax_list, tax_create, tax_update, tax_delete
+    tax_list, tax_create, tax_update, tax_delete, 
+    price_list, price_list_data, delete_price_list
+    ,delete_materials, PriceListView
 )
 
 urlpatterns = [
@@ -19,8 +21,10 @@ urlpatterns = [
     path('customers/', CustomerListView.as_view(), name='customer_list'),
     path('customers/<int:customer_id>/data/', get_customer_data, name='get_customer_data'),
     path('search-customers/', search_customers, name='search_customers'),
+
     path('materials/', MaterialListView.as_view(), name='material_list'),
     path('materials/<int:material_id>/data/', get_material_data, name='get_material_data'),
+    path('materials/delete/', delete_materials, name='delete_materials'),
     
     # budgets
     path('budgets/', BudgetListView.as_view(), name='budget_list'),
@@ -40,6 +44,11 @@ urlpatterns = [
     path('taxes/create/', tax_create, name='tax_create'),
     path('taxes/<int:pk>/update/', tax_update, name='tax_update'),
     path('taxes/<int:pk>/delete/', tax_delete, name='tax_delete'),
+
+    #path('price-list/', price_list, name='price_list'),
+    path('price-list/', PriceListView.as_view(), name='price_list'),
+    path('price-list/<int:pk>/data/', price_list_data, name='price_list_data'),
+    path('price-list/<int:pk>/delete/', delete_price_list, name='delete_price_list'),
 
     # Adicione URLs para as outras páginas conforme necessário
     path('agendamento/', home, name='agendamento'),  # Placeholder

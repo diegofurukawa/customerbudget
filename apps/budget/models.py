@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Sum, F
 from django.core.validators import RegexValidator, MinValueValidator
+from django.utils import timezone
 
 
 # Mantenha seus modelos existentes (como Customer) aqui
@@ -38,27 +39,39 @@ class Customer(models.Model):
 class Material(models.Model):
     full_name = models.CharField(max_length=200, verbose_name="Nome Completo")
     nick_name = models.CharField(max_length=100, verbose_name="Apelido")
+    ean_code = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código EAN")
     description = models.TextField(verbose_name="Descrição", blank=True)
-    cost_value = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        verbose_name="Valor de Custo",
-        validators=[MinValueValidator(0)],
-        default=0.00,  # Adicione esta linha
-        null=False  # Adicione esta linha
-        #,blank=True  # Adicione esta linha
-    )
     active = models.BooleanField(default=True, verbose_name="Ativo")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
     def __str__(self):
         return self.full_name
+    
+    def get_current_price(self):
+        current_date = timezone.now().date()
+        current_price = self.prices.filter(
+            active=True,
+            start_date__lte=current_date,
+            end_date__gte=current_date
+        ).order_by('-start_date').first()
+        
+        return current_price.total_value if current_price else 0
 
     class Meta:
         verbose_name = "Material"
         verbose_name_plural = "Materiais"
         ordering = ['full_name']
+
+class MaterialPrice(models.Model):
+    material = models.ForeignKey(Material, related_name='prices', on_delete=models.CASCADE)
+    total_value = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Valor Total")
+    start_date = models.DateField(verbose_name="Data de Início")
+    end_date = models.DateField(verbose_name="Data de Fim")
+    active = models.BooleanField(default=True, verbose_name="Ativo")
+
+    def __str__(self):
+        return f"{self.material.full_name} - R$ {self.total_value} ({self.start_date} to {self.end_date})"
 
 class Budget(models.Model):
     STATUS_CHOICES = (
@@ -142,3 +155,50 @@ class Tax(models.Model):
     class Meta:
         verbose_name = "Taxa/Imposto"
         verbose_name_plural = "Taxas e Impostos"
+
+
+from django.db import models
+from django.core.validators import MinValueValidator
+from decimal import Decimal
+from django.utils import timezone
+
+class Price_List(models.Model):
+    material = models.ForeignKey('Material', on_delete=models.CASCADE)
+    value = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    tax = models.ForeignKey('Tax', on_delete=models.SET_NULL, null=True, blank=True)
+    type_tax = models.CharField(max_length=1, choices=[('+', 'Positive'), ('-', 'Negative')], default='+')
+    tax_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    value_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.calculate_values()
+        super().save(*args, **kwargs)
+
+    def calculate_values(self):
+        if self.tax:
+            self.tax_value = self.tax.value
+            if self.tax.calc_operator == '%':
+                factor = 1 + (self.tax_value / 100) if self.type_tax == '+' else 1 - (self.tax_value / 100)
+                self.value_total = self.value * factor
+            else:
+                self.value_total = self.value + self.tax_value if self.type_tax == '+' else self.value - self.tax_value
+        else:
+            self.tax_value = 0
+            self.value_total = self.value
+
+    def is_current(self):
+        today = timezone.now().date()
+        return self.start_date <= today and (self.end_date is None or self.end_date >= today)
+
+    def __str__(self):
+        return f"{self.material.full_name} - R$ {self.value_total} ({self.start_date} to {self.end_date or 'No end date'})"
+
+    class Meta:
+        ordering = ['-start_date', 'material__full_name']
+        verbose_name = "Lista de Preços"
+        verbose_name_plural = "Listas de Preços"

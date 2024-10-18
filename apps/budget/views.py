@@ -1,10 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Q, Sum, F, FloatField, Count
+from django.db.models import Prefetch, F, Sum, Case, When, DecimalField, Subquery, OuterRef, Q, FloatField, Count
 from django.http import JsonResponse, HttpResponse
 from .models import Customer, Material, Tax
-from .forms import CustomerForm, MaterialForm, BudgetForm, BudgetItemFormSet, Budget, CustomerSearchForm, TaxForm
-from .models import Budget, Customer, Material, BudgetItem
+from .forms import CustomerForm, MaterialForm, BudgetForm, BudgetItemFormSet, Budget, CustomerSearchForm, TaxForm, PriceListForm
+from .models import Budget, Customer, Material, BudgetItem, MaterialPrice, Price_List
 from django.views.generic import ListView, View
 from django.db.models.functions import Coalesce, TruncDate
 from django.db import transaction
@@ -23,6 +23,14 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.views.generic import TemplateView
 from django import forms
+from django.core.paginator import Paginator
+from .models import Budget, Material
+from django.views import View
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+import json
 
 
 def home(request):
@@ -133,10 +141,12 @@ def get_material_data(request, material_id):
         'full_name': material.full_name,
         'nick_name': material.nick_name,
         'description': material.description,
-        'cost_value': str(material.cost_value),  # Convert to string for JSON serialization
+        'ean_code': material.ean_code,
         'active': material.active,
+        'current_price': str(material.get_current_price()),  # Assumindo que você tem um método get_current_price()
     }
     return JsonResponse(data)
+
 
 
 class BudgetListView(ListView):
@@ -145,21 +155,26 @@ class BudgetListView(ListView):
     context_object_name = 'budgets'
 
     def get_queryset(self):
-        return Budget.objects.annotate(
-            total_value=Sum(F('items__quantity') * F('items__material__cost_value'))
-        ).order_by('-created_at')
+        current_date = timezone.now().date()
+        
+        # Subquery to get the current price for each material
+        current_price_subquery = MaterialPrice.objects.filter(
+            material=OuterRef('items__material'),
+            active=True,
+            start_date__lte=current_date,
+            end_date__gte=current_date
+        ).order_by('-start_date').values('total_value')[:1]
 
-    def post(self, request, *args, **kwargs):
-        budget_id = request.POST.get('budget_id')
-        action = request.POST.get('action')
-        
-        if action == 'cancel':
-            budget = get_object_or_404(Budget, id=budget_id, status='CREATED')
-            budget.status = 'CANCELED'
-            budget.save()
-            return JsonResponse({'success': True, 'new_status': 'Cancelado'})
-        
-        return JsonResponse({'success': False, 'error': 'Ação inválida'})
+        return Budget.objects.annotate(
+            total_cost=Sum(
+                F('items__quantity') * Subquery(current_price_subquery, output_field=DecimalField())
+            )
+        ).prefetch_related('items__material')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add any additional context data you need
+        return context
 
 
 class BudgetCreateView(View):
@@ -334,12 +349,9 @@ def generate_budget_pdf(request, budget_id):
     else:
         elements.append(Paragraph("Logo não encontrado", normal_style))
 
-    # Adicionar um parágrafo entre o logo e o header_text
     elements.append(Spacer(1, 12))
     elements.append(Paragraph("FORJA DE AÇO - ORÇAMENTO", title_style))
-    #elements.append(Spacer(1, 12))
 
-    # Cabeçalho com informações da empresa (cada informação em uma linha separada)
     header_text = f"""
     {settings.COMPANY_NAME}<br/>
     {settings.DOCUMENT_TYPE}: {settings.DOCUMENT_NUMBER}<br/>
@@ -350,20 +362,19 @@ def generate_budget_pdf(request, budget_id):
     elements.append(Paragraph(header_text, normal_style))
     elements.append(Spacer(1, 12))
 
-    # Informações do cliente
     elements.append(Paragraph(f"Cliente: {budget.customer.name}", normal_style))
     elements.append(Paragraph(f"Endereço: {budget.customer.address}", normal_style))
     elements.append(Spacer(1, 12))
 
-    # Itens do orçamento
     data = [['Item', 'Quantidade', 'Valor Unitário', 'Valor Total']]
     total = 0
     for item in items:
-        valor_total = item.quantity * item.material.cost_value
+        current_price = item.material.get_current_price()
+        valor_total = item.quantity * current_price
         data.append([
             item.material.full_name,
             str(item.quantity),
-            f"R$ {item.material.cost_value:.2f}",
+            f"R$ {current_price:.2f}",
             f"R$ {valor_total:.2f}"
         ])
         total += valor_total
@@ -390,24 +401,20 @@ def generate_budget_pdf(request, budget_id):
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"TOTAL DO ORÇAMENTO: R$ {total:.2f}", styles['Heading2']))
 
-    # Informações adicionais
     elements.append(Spacer(1, 12))
     elements.append(Paragraph("PRAZO DE ENTREGA: 27 dias úteis", normal_style))
     elements.append(Paragraph("FORMA DE PAGAMENTO: Em até 10x no cartão de crédito", normal_style))
     elements.append(Paragraph("Elaboração de contrato após aceite de orçamento.", normal_style))
 
-    # Construa o PDF
     doc.build(elements)
     pdf = buffer.getvalue()
     buffer.close()
 
-    # Preparar a resposta
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="orcamento_{budget.id}.pdf"'
     response.write(pdf)
 
     return response
-
 
 
 class BudgetPDFPreviewView(View):
@@ -712,3 +719,205 @@ def tax_delete(request, pk):
     tax.delete()
     messages.success(request, 'Taxa/Imposto excluído com sucesso.')
     return redirect('tax_list')
+
+
+
+
+def price_list(request):
+    price_lists = Price_List.objects.all()
+    form = PriceListForm()
+    
+    if request.method == 'POST':
+        price_list_id = request.POST.get('price_list_id')
+        if price_list_id:
+            price_list = get_object_or_404(Price_List, pk=price_list_id)
+            form = PriceListForm(request.POST, instance=price_list)
+        else:
+            form = PriceListForm(request.POST)
+        
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse({'success': False, 'errors': form.errors})
+    
+    context = {
+        'price_lists': price_lists,
+        'form': form
+    }
+    return render(request, 'budget/price_list.html', context)
+
+
+class PriceListView(View):
+    def get(self, request):
+        # Filtragem
+        query = request.GET.get('q')
+        material_id = request.GET.get('material')
+        is_active = request.GET.get('active')
+        taxes = Tax.objects.filter(enabled=True)
+        price_lists = Price_List.objects.all()
+        
+        if query:
+            price_lists = price_lists.filter(
+                Q(material__full_name__icontains=query) | 
+                Q(material__nick_name__icontains=query)
+            )
+        
+        if material_id:
+            price_lists = price_lists.filter(material_id=material_id)
+        
+        if is_active:
+            is_active = is_active.lower() == 'true'
+            price_lists = price_lists.filter(active=is_active)
+
+        # Ordenação
+        order_by = request.GET.get('order_by', '-start_date')
+        price_lists = price_lists.order_by(order_by)
+
+        # Paginação
+        paginator = Paginator(price_lists, 10)  # 10 itens por página
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        form = PriceListForm()
+        materials = Material.objects.all()
+
+        context = {
+            'price_lists': page_obj,
+            'form': form,
+            'materials': materials,
+            'current_order': order_by,
+            'query': query,
+            'selected_material': material_id,
+            'is_active': is_active,
+            'taxes': taxes,
+        }
+        return render(request, 'budget/price_list.html', context)
+
+    def post(self, request):
+        price_list_id = request.POST.get('price_list_id')
+        if price_list_id:
+            price_list = get_object_or_404(Price_List, pk=price_list_id)
+            form = PriceListForm(request.POST, instance=price_list)
+        else:
+            form = PriceListForm(request.POST)
+        
+        if form.is_valid():
+            price_list = form.save()
+            messages.success(request, 'Preço salvo com sucesso.')
+            return JsonResponse({
+                'success': True,
+                'id': price_list.id,
+                'material': price_list.material.full_name,
+                'value': float(price_list.value),
+                'value_total': float(price_list.value_total),
+                'start_date': price_list.start_date.strftime('%d/%m/%Y'),
+                'end_date': price_list.end_date.strftime('%d/%m/%Y') if price_list.end_date else '-',
+                'active': price_list.active,
+            })
+        else:
+            return JsonResponse({'success': False, 'errors': form.errors})
+
+def price_list_data(request, pk):
+    price_list = get_object_or_404(Price_List, pk=pk)
+    data = {
+        'id': price_list.id,
+        'material': price_list.material.id,
+        'value': float(price_list.value),
+        'tax': price_list.tax.id if price_list.tax else None,
+        'type_tax': price_list.type_tax,
+        'start_date': price_list.start_date.isoformat(),
+        'end_date': price_list.end_date.isoformat() if price_list.end_date else None,
+        'active': price_list.active,
+    }
+    return JsonResponse(data)
+
+def delete_price_list(request, pk):
+    if request.method == 'POST':
+        price_list = get_object_or_404(Price_List, pk=pk)
+        price_list.delete()
+        messages.success(request, 'Preço excluído com sucesso.')
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False, 'error': 'Método não permitido'})
+
+
+def material_list(request):
+    materials = Material.objects.all()
+    materials_with_prices = []
+    for material in materials:
+        materials_with_prices.append({
+            'id': material.id,
+            'full_name': material.full_name,
+            'nick_name': material.nick_name,
+            'ean_code': material.ean_code,
+            'active': material.active,
+            'current_price': material.get_current_price()
+        })
+    return render(request, 'budget/material_list.html', {'materials': materials_with_prices})
+
+
+def material_create_update(request):
+    material_id = request.POST.get('material_id')
+    if material_id:
+        material = get_object_or_404(Material, id=material_id)
+        form = MaterialForm(request.POST, instance=material)
+    else:
+        form = MaterialForm(request.POST)
+
+    if form.is_valid():
+        form.save()
+        return JsonResponse({'success': True})
+    else:
+        return JsonResponse({'success': False, 'errors': form.errors})
+    
+def material_data(request, material_id):
+    material = get_object_or_404(Material, id=material_id)
+    data = {
+        'id': material.id,
+        'full_name': material.full_name,
+        'nick_name': material.nick_name,
+        'description': material.description,
+        'ean_code': material.ean_code,
+        'active': material.active,
+        'total_value': get_total_value(material)  # Função auxiliar para obter o valor total
+    }
+    return JsonResponse(data)
+
+def material_delete(request):
+    if request.method == 'POST':
+        material_ids = request.POST.getlist('material_ids[]')
+        Material.objects.filter(id__in=material_ids).delete()
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False, 'error': 'Método não permitido'})
+
+
+# Função auxiliar para obter o valor total (você precisa implementar a lógica correta)
+def get_total_value(material):
+    # Implemente a lógica para obter o valor total da price_list
+    # Por enquanto, retornaremos 0 como exemplo
+    return 0
+
+
+@require_POST
+@csrf_exempt
+def delete_materials(request):
+    try:
+        data = json.loads(request.body)
+        material_ids = data.get('material_ids', [])
+        
+        # Deletar os materiais
+        Material.objects.filter(id__in=material_ids).delete()
+        
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+    
+class TaxListView(ListView):
+    model = Tax
+    template_name = 'budget/tax_list.html'
+    context_object_name = 'taxes'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = TaxForm()  # Adicione o formulário ao contexto
+        return context
