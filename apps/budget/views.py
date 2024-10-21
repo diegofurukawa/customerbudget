@@ -921,3 +921,26 @@ class TaxListView(ListView):
         context = super().get_context_data(**kwargs)
         context['form'] = TaxForm()  # Adicione o formulário ao contexto
         return context
+    
+
+@require_POST
+def delete_customer(request, customer_id):
+    try:
+        customer = Customer.objects.get(id=customer_id)
+        customer.delete()
+        return JsonResponse({'success': True})
+    except Customer.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Cliente não encontrado'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+    
+@require_POST
+def delete_customers(request):
+    data = json.loads(request.body)
+    customer_ids = data.get('customer_ids', [])
+    
+    try:
+        Customer.objects.filter(id__in=customer_ids).delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})

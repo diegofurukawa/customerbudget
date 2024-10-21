@@ -10,7 +10,7 @@ from apps.budget.views import (
     ,DashboardView, HomeView, 
     tax_list, tax_create, tax_update, tax_delete, 
     price_list, price_list_data, delete_price_list
-    ,delete_materials, PriceListView
+    ,delete_materials, PriceListView, delete_customer, delete_customers
 )
 
 urlpatterns = [
@@ -20,6 +20,8 @@ urlpatterns = [
     path('', DashboardView.as_view(), name='dashboard'),
     path('customers/', CustomerListView.as_view(), name='customer_list'),
     path('customers/<int:customer_id>/data/', get_customer_data, name='get_customer_data'),
+    path('customers/<int:customer_id>/delete/', delete_customer, name='delete_customer'),
+    path('customers/<int:customer_id>/delete/', delete_customers, name='delete_customer'),
     path('search-customers/', search_customers, name='search_customers'),
 
     path('materials/', MaterialListView.as_view(), name='material_list'),
