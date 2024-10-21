@@ -4,6 +4,13 @@
 
 {% block page_title %}Lista de Orçamentos{% endblock %}
 
+{% block extra_css %}
+
+    {% load static %}
+        <link rel="stylesheet" href="{% static 'css/style.css' %}">
+        
+{% endblock %}
+
 {% block content %}
     {% if messages %}
         {% for message in messages %}
