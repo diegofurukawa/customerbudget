@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Sum, F
+from django.db.models import Sum, F, Q
 from django.core.validators import RegexValidator, MinValueValidator
 from django.utils import timezone
 
@@ -49,14 +49,45 @@ class Material(models.Model):
         return self.full_name
     
     def get_current_price(self):
+        """
+        Retorna o valor total atual do material baseado na tabela Price_List.
+        Considera apenas preços ativos e dentro do período de validade.
+        """
         current_date = timezone.now().date()
-        current_price = self.prices.filter(
+        current_price = Price_List.objects.filter(
+            material=self,
             active=True,
-            start_date__lte=current_date,
-            end_date__gte=current_date
-        ).order_by('-start_date').first()
+            start_date__lte=current_date
+        ).filter(
+            Q(end_date__gte=current_date) | Q(end_date__isnull=True)
+        ).order_by('-start_date', '-id').first()
         
-        return current_price.total_value if current_price else 0
+        return current_price.value_total if current_price else 0
+
+    def get_current_price_details(self):
+        """
+        Retorna os detalhes completos do preço atual, incluindo valor base,
+        impostos e valor total.
+        """
+        current_date = timezone.now().date()
+        current_price = Price_List.objects.filter(
+            material=self,
+            active=True,
+            start_date__lte=current_date
+        ).filter(
+            Q(end_date__gte=current_date) | Q(end_date__isnull=True)
+        ).order_by('-start_date', '-id').first()
+        
+        if current_price:
+            return {
+                'base_value': current_price.value,
+                'tax_value': current_price.tax_value,
+                'total_value': current_price.value_total,
+                'tax_info': current_price.tax.description if current_price.tax else None,
+                'start_date': current_price.start_date,
+                'end_date': current_price.end_date
+            }
+        return None
 
     class Meta:
         verbose_name = "Material"

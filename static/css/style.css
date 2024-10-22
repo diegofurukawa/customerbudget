@@ -142,7 +142,7 @@
     max-width: 500px;
 }
 @media (max-width: 768px) {
-    .customer-actions {
+    .tax-actions {
         flex-direction: column;
         align-items: stretch;
     }
@@ -152,30 +152,51 @@
     .mobile-hide {
         display: none;
     }
-    /* .table-responsive {
+    .table-responsive {
         border: 0;
     }
     .table-responsive table {
         border-collapse: separate;
         border-spacing: 0 1em;
     }
-
+    .table-responsive thead {
+        display: none;
+    }
     .table-responsive tbody tr {
         display: block;
         margin-bottom: 1em;
-        border: 5px solid #dee2e6;
+        border: 1px solid #dee2e6;
         border-radius: 0.35rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        background: #fff;
     }
-
     .table-responsive tbody td {
         display: block;
         text-align: right;
-        padding: 0.5rem;
+        padding: 0.75rem;
+        border: none;
+        border-bottom: 1px solid #eee;
     }
-
+    .table-responsive tbody td:last-child {
+        border-bottom: none;
+    }
     .table-responsive tbody td:before {
         content: attr(data-label);
         float: left;
         font-weight: bold;
-    } */
+        color: #555;
+    }
+    .table-responsive td:first-child {
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+    .table-responsive .btn-group {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    .table-responsive .checkbox-container {
+        text-align: left;
+    }
 }

@@ -11,6 +11,7 @@ from apps.budget.views import (
     tax_list, tax_create, tax_update, tax_delete, 
     price_list, price_list_data, delete_price_list
     ,delete_materials, PriceListView, delete_customer, delete_customers
+    ,get_material_price_details
 )
 
 urlpatterns = [
@@ -27,6 +28,7 @@ urlpatterns = [
     path('materials/', MaterialListView.as_view(), name='material_list'),
     path('materials/<int:material_id>/data/', get_material_data, name='get_material_data'),
     path('materials/delete/', delete_materials, name='delete_materials'),
+    path('materials/<int:material_id>/price-details/', get_material_price_details, name='material_price_details'),
     
     # budgets
     path('budgets/', BudgetListView.as_view(), name='budget_list'),

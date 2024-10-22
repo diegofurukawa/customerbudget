@@ -26,7 +26,7 @@
     <div class="material-actions mb-3">
         <div class="action-buttons">
             <button class="btn btn-primary" id="newMaterialBtn">+ Novo Material</button>
-            <button id="editMaterialBtn" class="btn btn-secondary" disabled>Editar Material</button>
+            <!-- <button id="editMaterialBtn" class="btn btn-secondary" disabled>Editar Material</button> -->
         </div>
         <div class="search-container mt-2 mt-md-0">
             <div class="input-group">
@@ -58,7 +58,9 @@
                     <td><input type="checkbox" class="material-select" data-id="{{ material.id }}"></td>
                     <td>{{ material.full_name }}</td>
                     <td>{{ material.nick_name }}</td>
-                    <td>R$ {{ material.cost_value|floatformat:2 }}</td>
+                    <td class="current-price" data-bs-toggle="tooltip" title="Clique para ver detalhes">
+                        R$ {{ material.get_current_price|floatformat:2 }}
+                    </td>
                     <td>{% if material.active %}Sim{% else %}Não{% endif %}</td>
                     <td>
                         <button class="btn btn-secondary btn-sm edit-material" data-id="{{ material.id }}">Editar</button>

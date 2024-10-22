@@ -158,23 +158,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 setValueSafely('id_full_name', data.full_name);
                 setValueSafely('id_nick_name', data.nick_name);
                 setValueSafely('id_description', data.description);
-                setValueSafely('id_cost_value', data.cost_value);
+                setValueSafely('id_ean_code', data.ean_code);
                 setCheckedSafely('id_active', data.active);
                 
-                if (taxTable) {
-                    taxTable.innerHTML = '';
-                    data.taxes.forEach((tax, index) => {
-                        addTaxRow(tax.tax_id, tax.sign);
-                    });
+                // Atualizar a exibição do preço atual (se necessário)
+                const currentPriceDisplay = document.getElementById('current_price_display');
+                if (currentPriceDisplay && data.current_price) {
+                    currentPriceDisplay.textContent = `Valor Atual: R$ ${parseFloat(data.current_price.total_value).toFixed(2)}`;
+                    
+                    // Se quiser mostrar mais detalhes do preço
+                    if (data.current_price.tax_info) {
+                        currentPriceDisplay.title = `Valor Base: R$ ${parseFloat(data.current_price.base_value).toFixed(2)}\n` +
+                                                  `${data.current_price.tax_info}: R$ ${parseFloat(data.current_price.tax_value).toFixed(2)}`;
+                    }
                 }
-
-                const modalTitle = $('modalTitle');
+    
+                const modalTitle = document.getElementById('modalTitle');
                 if (modalTitle) {
                     modalTitle.textContent = 'EDITAR MATERIAL';
                 }
                 openModal();
             })
             .catch(error => console.error('Erro ao carregar dados do material:', error));
+    }
+    
+    // Função para atualizar a linha da tabela com os dados do material
+    function updateMaterialRow(materialId, data) {
+        const row = document.querySelector(`tr[data-id="${materialId}"]`);
+        if (row) {
+            row.querySelector('td:nth-child(2)').textContent = data.full_name;
+            row.querySelector('td:nth-child(3)').textContent = data.nick_name || '';
+            row.querySelector('td:nth-child(4)').textContent = 
+                data.current_price ? `R$ ${parseFloat(data.current_price.total_value).toFixed(2)}` : 'R$ 0,00';
+            row.querySelector('td:nth-child(5)').textContent = data.active ? 'Sim' : 'Não';
+        }
+    }
+    
+    // Atualizar a função de salvamento para lidar corretamente com a resposta
+    function handleMaterialSave(formData) {
+        fetch('/materials/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.material_id) {
+                    updateMaterialRow(data.material_id, data);
+                } else {
+                    location.reload(); // Recarrega a página para mostrar o novo material
+                }
+                closeModal();
+                showAlert('Material salvo com sucesso!', 'success');
+            } else {
+                showFormErrors(data.errors);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao salvar material:', error);
+            showAlert('Erro ao salvar material. Por favor, tente novamente.', 'danger');
+        });
     }
 
     if (addTaxBtn) {

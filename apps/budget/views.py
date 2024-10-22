@@ -841,19 +841,39 @@ def delete_price_list(request, pk):
     return JsonResponse({'success': False, 'error': 'Método não permitido'})
 
 
+def get_material_price_details(request, material_id):
+    material = get_object_or_404(Material, id=material_id)
+    current_price_details = material.get_current_price_details()
+    
+    data = {
+        'full_name': material.full_name,
+        'current_price': current_price_details
+    }
+    return JsonResponse(data)
+
 def material_list(request):
-    materials = Material.objects.all()
-    materials_with_prices = []
-    for material in materials:
-        materials_with_prices.append({
-            'id': material.id,
-            'full_name': material.full_name,
-            'nick_name': material.nick_name,
-            'ean_code': material.ean_code,
-            'active': material.active,
-            'current_price': material.get_current_price()
-        })
-    return render(request, 'budget/material_list.html', {'materials': materials_with_prices})
+    materials = Material.objects.all().order_by('full_name')
+    form = MaterialForm()
+    
+    context = {
+        'materials': materials,
+        'form': form
+    }
+    return render(request, 'budget/material_list.html', context)
+
+# def material_list(request):
+#     materials = Material.objects.all()
+#     materials_with_prices = []
+#     for material in materials:
+#         materials_with_prices.append({
+#             'id': material.id,
+#             'full_name': material.full_name,
+#             'nick_name': material.nick_name,
+#             'ean_code': material.ean_code,
+#             'active': material.active,
+#             'current_price': material.get_current_price()
+#         })
+#     return render(request, 'budget/material_list.html', {'materials': materials_with_prices})
 
 
 def material_create_update(request):
@@ -872,6 +892,8 @@ def material_create_update(request):
     
 def material_data(request, material_id):
     material = get_object_or_404(Material, id=material_id)
+    current_price_details = material.get_current_price_details()
+    
     data = {
         'id': material.id,
         'full_name': material.full_name,
@@ -879,7 +901,7 @@ def material_data(request, material_id):
         'description': material.description,
         'ean_code': material.ean_code,
         'active': material.active,
-        'total_value': get_total_value(material)  # Função auxiliar para obter o valor total
+        'current_price': current_price_details
     }
     return JsonResponse(data)
 
