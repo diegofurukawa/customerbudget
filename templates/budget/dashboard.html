@@ -58,7 +58,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var ctx = document.getElementById('budgetComparisonChart').getContext('2d');
-    var timeSeriesData = {{ time_series_data|safe }};
+    // var timeSeriesData = {{ time_series_data|safe }};
     
     var dates = timeSeriesData.base.map(item => item.date);
     
