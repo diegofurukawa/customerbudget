@@ -15,14 +15,98 @@ const SELECTORS = {
     STATUS_INPUT: 'id_status'
 };
 
+const BudgetFormCalculator = {
+    calculateItemValues(quantity, value, taxValue) {
+        const safeQuantity = parseFloat(quantity) || 0;
+        const safeValue = parseFloat(value) || 0;
+        const safeTaxValue = parseFloat(taxValue) || 0;
+
+        const itemValue = safeQuantity * safeValue;
+        const itemTaxValue = safeQuantity * safeTaxValue;
+        const itemTotal = itemValue + itemTaxValue;
+        
+        return {
+            itemValue,
+            itemTaxValue,
+            itemTotal
+        };
+    },
+
+    getSafeValue(element, selector) {
+        if (!element) return 0;
+        const input = element.querySelector(selector);
+        return input ? (parseFloat(input.value) || 0) : 0;
+    },
+
+    updateBudgetItemValues(row) {
+        if (!row) return { quantity: 0, value: 0, taxValue: 0, valueTotal: 0 };
+
+        const quantity = this.getSafeValue(row, '.quantity-input');
+        const value = this.getSafeValue(row, 'input[name$="-value"]');
+        const taxValue = this.getSafeValue(row, 'input[name$="-tax_value"]');
+        
+        const valueTotal = quantity * (value + taxValue);
+        
+        const valueTotalInput = row.querySelector('input[name$="-value_total"]');
+        if (valueTotalInput) {
+            valueTotalInput.value = valueTotal.toFixed(2);
+        }
+        
+        return {
+            quantity,
+            value,
+            taxValue,
+            valueTotal
+        };
+    },
+
+    calculateBudgetTotals(itemsTable) {
+        let budgetTotals = {
+            value: 0,
+            taxValue: 0,
+            valueTotal: 0
+        };
+
+        if (!itemsTable) return budgetTotals;
+
+        const rows = itemsTable.querySelectorAll('tbody tr');
+        if (!rows || rows.length === 0) return budgetTotals;
+
+        rows.forEach(row => {
+            if (!row) return;
+            const itemValues = this.updateBudgetItemValues(row);
+            budgetTotals.value += itemValues.quantity * itemValues.value;
+            budgetTotals.taxValue += itemValues.quantity * itemValues.taxValue;
+            budgetTotals.valueTotal += itemValues.valueTotal;
+        });
+
+        return budgetTotals;
+    }
+};
+
 class BudgetForm {
     constructor(itemFormsetPrefix) {
         this.itemFormsetPrefix = itemFormsetPrefix;
         this.totalForms = document.getElementById(SELECTORS.TOTAL_FORMS(itemFormsetPrefix));
+        this.errorHandler = {
+            handleError: (message, error) => {
+                console.error(message, error);
+                alert(`${message}. ${error.message || 'Por favor, tente novamente.'}`);
+            },
+            showWarning: (message) => {
+                alert(message);
+            },
+            showValidationError: (message) => {
+                alert(message);
+                return false;
+            }
+        };
+
         if (!this.validateRequiredElements()) {
             throw new Error('Elementos obrigatórios não encontrados');
         }
         this.initializeFormDefaults();
+        this.initializeTable(); // Nova chamada para inicializar a tabela
         this.initializeEventListeners();
         this.initializeTotals();
     }
@@ -41,13 +125,11 @@ class BudgetForm {
     }
 
     initializeFormDefaults() {
-        // Inicializa o status do orçamento
         const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
         if (statusInput && !statusInput.value) {
             statusInput.value = 'CREATED';
         }
 
-        // Inicializa os campos de valor do orçamento se necessário
         const budgetValueInputs = ['budget_value', 'budget_tax_value', 'budget_value_total'];
         budgetValueInputs.forEach(inputId => {
             const input = document.getElementById(inputId);
@@ -57,34 +139,49 @@ class BudgetForm {
         });
     }
 
+    // Novo método para inicializar a tabela
+    initializeTable() {
+        const itemsTable = document.getElementById(SELECTORS.ITEMS_TABLE);
+        if (!itemsTable) return;
+
+        // Remove a linha vazia inicial se existir
+        const tbody = itemsTable.querySelector('tbody');
+        if (tbody) {
+            const emptyRows = tbody.querySelectorAll('tr').forEach(row => {
+                const materialInput = row.querySelector('input[name*="-material"]');
+                const quantityInput = row.querySelector('input[name*="-quantity"]');
+                
+                if (!materialInput?.value && (!quantityInput?.value || quantityInput.value === '0')) {
+                    row.remove();
+                }
+            });
+        }
+
+        // Atualiza o contador de forms
+        if (this.totalForms) {
+            const actualRows = tbody.querySelectorAll('tr').length;
+            this.totalForms.value = actualRows;
+        }
+    }
+
     initializeEventListeners() {
-        // Add Item Button
         document.getElementById(SELECTORS.ADD_ITEM_BTN)?.addEventListener('click', () => this.handleAddItem());
 
-        // Remove Item Buttons
         document.addEventListener('click', (e) => {
             if (e.target.matches('.remove-item')) {
                 this.handleRemoveItem(e.target);
             }
         });
 
-        // Quantity Change
         document.addEventListener('change', (e) => {
             if (e.target.matches('.quantity-input')) {
                 this.handleQuantityChange(e.target);
             }
         });
 
-        // Material Select Change
         document.getElementById(SELECTORS.MATERIAL_SELECT)?.addEventListener('change', () => this.validateForm());
-
-        // Quantity Input Change
         document.getElementById(SELECTORS.QUANTITY_INPUT)?.addEventListener('input', () => this.validateForm());
-
-        // Customer Search
         this.initializeCustomerSearch();
-
-        // Form Submission
         document.getElementById('budget-form')?.addEventListener('submit', (e) => this.handleSubmit(e));
     }
 
@@ -93,8 +190,8 @@ class BudgetForm {
     }
 
     validateForm() {
-        const materialId = document.getElementById(SELECTORS.MATERIAL_SELECT).value;
-        const quantity = parseFloat(document.getElementById(SELECTORS.QUANTITY_INPUT).value);
+        const materialId = document.getElementById(SELECTORS.MATERIAL_SELECT)?.value;
+        const quantity = parseFloat(document.getElementById(SELECTORS.QUANTITY_INPUT)?.value);
         const addButton = document.getElementById(SELECTORS.ADD_ITEM_BTN);
         
         if (addButton) {
@@ -102,12 +199,106 @@ class BudgetForm {
         }
     }
 
+    // Método de validação melhorado
+    validateBudgetItems(items) {
+        const validations = {
+            material: {
+                selector: 'input[name*="-material"]',
+                validate: value => !!value,
+                message: index => `Material do item ${index + 1} não foi selecionado`
+            },
+            quantity: {
+                selector: 'input[name*="-quantity"]',
+                validate: value => parseFloat(value) > 0,
+                message: index => `Quantidade do item ${index + 1} deve ser maior que zero`
+            },
+            value: {
+                selector: 'input[name$="-value"]',
+                validate: value => parseFloat(value) > 0,
+                message: index => `Valor do item ${index + 1} deve ser maior que zero`
+            },
+            valueTotal: {
+                selector: 'input[name$="-value_total"]',
+                validate: (value, row) => {
+                    const quantity = parseFloat(row.querySelector('input[name*="-quantity"]').value) || 0;
+                    const unitValue = parseFloat(row.querySelector('input[name$="-value"]').value) || 0;
+                    const taxValue = parseFloat(row.querySelector('input[name$="-tax_value"]').value) || 0;
+                    const expectedTotal = quantity * (unitValue + taxValue);
+                    return Math.abs(parseFloat(value) - expectedTotal) < 0.01;
+                },
+                message: index => `Valor total do item ${index + 1} está inconsistente`
+            }
+        };
+
+        let hasErrors = false;
+        const errors = [];
+        let validItemCount = 0;
+
+        items.forEach((row, index) => {
+            // Verifica se a linha está vazia
+            const materialInput = row.querySelector('input[name*="-material"]');
+            const quantityInput = row.querySelector('input[name*="-quantity"]');
+            
+            // Pula a validação se for uma linha vazia
+            if (!materialInput?.value && (!quantityInput?.value || quantityInput.value === '0')) {
+                return; // Continua para a próxima iteração
+            }
+
+            validItemCount++;
+            
+            for (const [field, validation] of Object.entries(validations)) {
+                const input = row.querySelector(validation.selector);
+                if (!input || !validation.validate(input.value, row)) {
+                    errors.push(validation.message(validItemCount));
+                    hasErrors = true;
+                    break;
+                }
+            }
+        });
+
+        // Verifica se há pelo menos um item válido
+        if (validItemCount === 0) {
+            this.showValidationErrors(['Por favor, adicione pelo menos um item ao orçamento']);
+            return false;
+        }
+
+        if (hasErrors) {
+            this.showValidationErrors(errors);
+            return false;
+        }
+
+        return true;
+    }
+
+    showValidationErrors(errors) {
+        const errorMessage = errors.join('\n');
+        alert('Por favor, corrija os seguintes erros:\n\n' + errorMessage);
+    }
+
+    validateBudgetForm() {
+        const customerIdInput = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT);
+        if (!customerIdInput || !customerIdInput.value) {
+            this.showValidationErrors(['Por favor, selecione um cliente']);
+            return false;
+        }
+
+        const itemsTable = document.getElementById(SELECTORS.ITEMS_TABLE);
+        if (!itemsTable) {
+            this.showValidationErrors(['Tabela de itens não encontrada']);
+            return false;
+        }
+
+        const items = itemsTable.querySelectorAll('tbody tr');
+        return this.validateBudgetItems(items);
+    }
+
     async handleAddItem() {
         try {
             const materialSelect = document.getElementById(SELECTORS.MATERIAL_SELECT);
-            const materialId = materialSelect.value;
-            const materialName = materialSelect.options[materialSelect.selectedIndex]?.text;
-            const quantity = parseFloat(document.getElementById(SELECTORS.QUANTITY_INPUT).value);
+            const materialId = materialSelect?.value;
+            const materialName = materialSelect?.options[materialSelect.selectedIndex]?.text;
+            const quantityInput = document.getElementById(SELECTORS.QUANTITY_INPUT);
+            const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
 
             if (!this.validateItemInput(materialId, quantity)) {
                 return;
@@ -124,17 +315,17 @@ class BudgetForm {
             this.validateForm();
 
         } catch (error) {
-            this.handleError('Erro ao adicionar item', error);
+            this.errorHandler.handleError('Erro ao adicionar item', error);
         }
     }
 
     validateItemInput(materialId, quantity) {
         if (!materialId) {
-            alert("Por favor, selecione um material.");
+            this.errorHandler.showWarning("Por favor, selecione um material.");
             return false;
         }
         if (!quantity || quantity <= 0) {
-            alert("Por favor, insira uma quantidade válida maior que zero.");
+            this.errorHandler.showWarning("Por favor, insira uma quantidade válida maior que zero.");
             return false;
         }
         return true;
@@ -160,18 +351,29 @@ class BudgetForm {
         }
     }
 
+    // Método addItemToTable modificado para prevenir linhas vazias
     addItemToTable(materialId, materialName, quantity, priceData) {
+        if (!materialId || !quantity) {
+            console.warn('Tentativa de adicionar item sem material ou quantidade');
+            return;
+        }
+
         const newIndex = parseInt(this.totalForms.value);
-        const valueTotal = quantity * (parseFloat(priceData.value_total) || parseFloat(priceData.value));
+        const values = BudgetFormCalculator.calculateItemValues(
+            quantity,
+            parseFloat(priceData.value),
+            parseFloat(priceData.tax_value)
+        );
         
-        const template = this.createItemTemplate(materialId, materialName, quantity, priceData, valueTotal, newIndex);
+        const template = this.createItemTemplate(materialId, materialName, quantity, priceData, values, newIndex);
         const tbody = document.querySelector(`#${SELECTORS.ITEMS_TABLE} tbody`);
         tbody.insertAdjacentHTML('beforeend', template);
         
         this.totalForms.value = newIndex + 1;
+        this.updateTotals();
     }
 
-    createItemTemplate(materialId, materialName, quantity, priceData, valueTotal, newIndex) {
+    createItemTemplate(materialId, materialName, quantity, priceData, values, newIndex) {
         return `
             <tr>
                 <td>
@@ -179,7 +381,7 @@ class BudgetForm {
                     <input type="hidden" name="${this.itemFormsetPrefix}-${newIndex}-id" value="">
                     <input type="hidden" name="${this.itemFormsetPrefix}-${newIndex}-value" value="${priceData.value}">
                     <input type="hidden" name="${this.itemFormsetPrefix}-${newIndex}-tax_value" value="${priceData.tax_value}">
-                    <input type="hidden" name="${this.itemFormsetPrefix}-${newIndex}-value_total" value="${valueTotal}">
+                    <input type="hidden" name="${this.itemFormsetPrefix}-${newIndex}-value_total" value="${values.itemTotal}">
                     ${materialName}
                 </td>
                 <td>
@@ -188,7 +390,7 @@ class BudgetForm {
                 </td>
                 <td class="text-end">R$ <span class="item-value">${parseFloat(priceData.value).toFixed(2)}</span></td>
                 <td class="text-end">R$ <span class="item-tax">${parseFloat(priceData.tax_value).toFixed(2)}</span></td>
-                <td class="text-end">R$ <span class="item-total">${valueTotal.toFixed(2)}</span></td>
+                <td class="text-end">R$ <span class="item-total">${values.itemTotal.toFixed(2)}</span></td>
                 <td>
                     <button type="button" class="btn btn-danger btn-sm remove-item">Remover</button>
                 </td>
@@ -205,13 +407,23 @@ class BudgetForm {
 
     handleQuantityChange(input) {
         const row = input.closest('tr');
+        if (!row) return;
+
         const quantity = parseFloat(input.value) || 0;
-        const value = parseFloat(row.querySelector('input[name$="-value"]').value);
-        const taxValue = parseFloat(row.querySelector('input[name$="-tax_value"]').value);
+        const valueInput = row.querySelector('input[name$="-value"]');
+        const taxValueInput = row.querySelector('input[name$="-tax_value"]');
+        const valueTotalInput = row.querySelector('input[name$="-value_total"]');
+        const itemTotalSpan = row.querySelector('.item-total');
         
-        const valueTotal = quantity * (value + taxValue);
-        row.querySelector('input[name$="-value_total"]').value = valueTotal;
-        row.querySelector('.item-total').textContent = valueTotal.toFixed(2);
+        if (!valueInput || !taxValueInput || !valueTotalInput || !itemTotalSpan) return;
+
+        const value = parseFloat(valueInput.value) || 0;
+        const taxValue = parseFloat(taxValueInput.value) || 0;
+        
+        const values = BudgetFormCalculator.calculateItemValues(quantity, value, taxValue);
+        
+        valueTotalInput.value = values.itemTotal.toFixed(2);
+        itemTotalSpan.textContent = values.itemTotal.toFixed(2);
         
         this.updateTotals();
     }
@@ -228,41 +440,22 @@ class BudgetForm {
     }
 
     updateTotals() {
-        let subtotal = 0;
-        let taxTotal = 0;
-        let grandTotal = 0;
-        
-        const tbody = document.querySelector(`#${SELECTORS.ITEMS_TABLE} tbody`);
-        if (tbody) {
-            tbody.querySelectorAll('tr').forEach(row => {
-                const quantityInput = row.querySelector('.quantity-input');
-                const valueInput = row.querySelector('input[name$="-value"]');
-                const taxValueInput = row.querySelector('input[name$="-tax_value"]');
-                
-                if (quantityInput && valueInput && taxValueInput) {
-                    const quantity = parseFloat(quantityInput.value) || 0;
-                    const value = parseFloat(valueInput.value) || 0;
-                    const taxValue = parseFloat(taxValueInput.value) || 0;
-                    
-                    subtotal += quantity * value;
-                    taxTotal += quantity * taxValue;
-                    grandTotal += quantity * (value + taxValue);
-                }
-            });
-        }
-        
-        this.updateTotalDisplays(subtotal, taxTotal, grandTotal);
+        const itemsTable = document.getElementById(SELECTORS.ITEMS_TABLE);
+        if (!itemsTable) return;
+
+        const totals = BudgetFormCalculator.calculateBudgetTotals(itemsTable);
+        this.updateTotalDisplays(totals.value, totals.taxValue, totals.valueTotal);
     }
 
     updateTotalDisplays(subtotal, taxTotal, grandTotal) {
         const updateElement = (id, value) => {
             const element = document.getElementById(id);
-            if (element) {
-                if (element.tagName === 'INPUT') {
-                    element.value = value.toFixed(2);
-                } else {
-                    element.textContent = value.toFixed(2);
-                }
+            if (!element) return;
+
+            if (element.tagName === 'INPUT') {
+                element.value = value.toFixed(2);
+            } else {
+                element.textContent = value.toFixed(2);
             }
         };
 
@@ -295,9 +488,9 @@ class BudgetForm {
     }
 
     async handleCustomerSearch() {
-        const searchTerm = document.getElementById(SELECTORS.CUSTOMER_SEARCH).value;
+        const searchTerm = document.getElementById(SELECTORS.CUSTOMER_SEARCH)?.value;
         if (!searchTerm) {
-            alert('Por favor, digite um termo para pesquisa');
+            this.errorHandler.showWarning('Por favor, digite um termo para pesquisa');
             return;
         }
 
@@ -308,12 +501,14 @@ class BudgetForm {
             const data = await response.json();
             this.renderCustomerResults(data);
         } catch (error) {
-            this.handleError('Erro ao pesquisar clientes', error);
+            this.errorHandler.handleError('Erro ao pesquisar clientes', error);
         }
     }
 
     renderCustomerResults(customers) {
         const customerList = document.getElementById(SELECTORS.CUSTOMER_LIST);
+        if (!customerList) return;
+        
         customerList.innerHTML = '';
         
         if (customers.length > 0) {
@@ -342,6 +537,8 @@ class BudgetForm {
     }
 
     handleCustomerSelection(customerElement) {
+        if (!customerElement) return;
+
         const updateElement = (id, value) => {
             const element = document.getElementById(id);
             if (element) element.textContent = value || '';
@@ -354,73 +551,148 @@ class BudgetForm {
         const customerIdInput = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT);
         if (customerIdInput) customerIdInput.value = customerElement.dataset.id;
 
-        document.getElementById(SELECTORS.CUSTOMER_RESULTS).style.display = 'none';
-        document.getElementById(SELECTORS.CUSTOMER_SEARCH).value = '';
+        const customerResults = document.getElementById(SELECTORS.CUSTOMER_RESULTS);
+        const customerSearch = document.getElementById(SELECTORS.CUSTOMER_SEARCH);
+        
+        if (customerResults) customerResults.style.display = 'none';
+        if (customerSearch) customerSearch.value = '';
     }
 
-    handleSubmit(event) {
+    async updateFormValuesBeforeSubmit(form) {
+        if (!form) {
+            throw new Error('Formulário não encontrado');
+        }
+
+        const itemsTable = document.getElementById(SELECTORS.ITEMS_TABLE);
+        if (!itemsTable) {
+            throw new Error('Tabela de itens não encontrada');
+        }
+
+        const rows = itemsTable.querySelectorAll('tbody tr');
+        if (!rows || rows.length === 0) {
+            throw new Error('Nenhum item encontrado no orçamento');
+        }
+
+        rows.forEach((row, index) => {
+            if (!row) return;
+
+            const quantityInput = row.querySelector('input[name*="-quantity"]');
+            const valueInput = row.querySelector('input[name*="-value"]:not([name*="-tax_value"]):not([name*="-value_total"])');
+            const taxValueInput = row.querySelector('input[name*="-tax_value"]');
+            const valueTotalInput = row.querySelector('input[name*="-value_total"]');
+
+            if (!quantityInput || !valueInput || !taxValueInput || !valueTotalInput) {
+                console.warn(`Campos incompletos para o item ${index + 1}`, {
+                    quantity: quantityInput?.name,
+                    value: valueInput?.name,
+                    taxValue: taxValueInput?.name,
+                    valueTotal: valueTotalInput?.name
+                });
+                return;
+            }
+
+            const quantity = parseFloat(quantityInput.value) || 0;
+            const value = parseFloat(valueInput.value) || 0;
+            const taxValue = parseFloat(taxValueInput.value) || 0;
+            const itemTotal = quantity * (value + taxValue);
+
+            valueTotalInput.value = itemTotal.toFixed(2);
+        });
+
+        const totals = BudgetFormCalculator.calculateBudgetTotals(itemsTable);
+        
+        const budgetFields = {
+            'budget_value': totals.value,
+            'budget_tax_value': totals.taxValue,
+            'budget_value_total': totals.valueTotal
+        };
+
+        Object.entries(budgetFields).forEach(([fieldId, value]) => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.value = value.toFixed(2);
+            }
+        });
+    }
+
+    async handleSubmit(event) {
         event.preventDefault();
         
-        // Garante que o status está definido
-        const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
-        if (statusInput && !statusInput.value) {
-            statusInput.value = 'CREATED';
+        try {
+            if (!this.validateBudgetForm()) {
+                return;
+            }
+
+            const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
+            if (statusInput && !statusInput.value) {
+                statusInput.value = 'CREATED';
+            }
+
+            await this.updateFormValuesBeforeSubmit(event.target);
+            const formData = new FormData(event.target);
+            
+            const csrfToken = formData.get('csrfmiddlewaretoken');
+            if (!csrfToken) {
+                throw new Error('Token CSRF não encontrado');
+            }
+
+            const response = await fetch(event.target.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                window.location.href = '/budgets/';
+            } else {
+                throw new Error(result.error || 'Erro ao salvar orçamento');
+            }
+        } catch (error) {
+            this.errorHandler.handleError('Erro ao salvar orçamento', error);
         }
-        
-        // Validação básica
-        const customerId = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT)?.value;
-        if (!customerId) {
-            alert('Por favor, selecione um cliente');
-            return;
-        }
+    }
 
-        const items = document.querySelectorAll(`#${SELECTORS.ITEMS_TABLE} tbody tr`);
-        if (items.length === 0) {
-            alert('Por favor, adicione pelo menos um item ao orçamento');
-            return;
-        }
-// Se tudo estiver ok, submete o formulário
-event.target.submit();
-}
+    resetInputs(materialSelect) {
+        if (materialSelect) materialSelect.value = '';
+        const quantityInput = document.getElementById(SELECTORS.QUANTITY_INPUT);
+        if (quantityInput) quantityInput.value = '';
+        this.validateForm();
+    }
 
-handleError(message, error) {
-    console.error(message, error);
-    alert(`${message}. ${error.message || 'Por favor, tente novamente.'}`);
-}
-
-resetInputs(materialSelect) {
-    materialSelect.value = '';
-    document.getElementById(SELECTORS.QUANTITY_INPUT).value = '';
-    this.validateForm();
-}
-
-formatCurrency(value) {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(value);
-}
+    formatCurrency(value) {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(value);
+    }
 }
 
 // Initialize the form when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-try {
-    const budgetForm = document.getElementById('budget-form');
-    if (!budgetForm) {
-        console.error('Formulário não encontrado');
-        return;
-    }
+    try {
+        const budgetForm = document.getElementById('budget-form');
+        if (!budgetForm) {
+            console.error('Formulário não encontrado');
+            return;
+        }
 
-    // Define o status inicial no carregamento da página
-    const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
-    if (statusInput && !statusInput.value) {
-        statusInput.value = 'CREATED';
-    }
+        const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
+        if (statusInput && !statusInput.value) {
+            statusInput.value = 'CREATED';
+        }
 
-    const budgetFormInstance = new BudgetForm('items');
-    console.log('Budget form initialized successfully');
-} catch (error) {
-    console.error('Error initializing budget form:', error);
-    alert('Erro ao inicializar o formulário. Por favor, recarregue a página.');
-}
+        const budgetFormInstance = new BudgetForm('items');
+        console.log('Budget form initialized successfully');
+    } catch (error) {
+        console.error('Error initializing budget form:', error);
+        alert('Erro ao inicializar o formulário. Por favor, recarregue a página.');
+    }
 });
