@@ -24,14 +24,15 @@
     <div class="actions-container mb-3">
         <div class="d-flex gap-2">
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#taxModal">NOVO</button>
-            <!-- <button id="editTaxBtn" class="btn btn-secondary" disabled>EDITAR</button> -->
         </div>
+
         <div class="search-container">
             <div class="input-group">
                 <input type="text" id="searchInput" class="form-control" placeholder="Pesquisar por...">
                 <button class="btn btn-success" id="searchButton">PESQUISAR</button>
             </div>
         </div>
+
         <div class="d-flex gap-2">
             <button class="btn btn-secondary" disabled>EXPORTAR PARA EXCEL</button>
             <span class="btn btn-light">TOTAL: {{ taxes.count }} taxa(s)/imposto(s)</span>
@@ -39,39 +40,39 @@
     </div>
 
     <div class="table-responsive">
-        <table class="table">
+        <table class="table" id="taxTable">
             <thead>
                 <tr>
-                    <th><input type="checkbox" id="selectAll"></th>
+                    <th>
+                        <input type="checkbox" id="selectAll">
+                    </th>
                     <th>Descrição</th>
                     <th>Sigla</th>
                     <th>Operador</th>
                     <th>Valor</th>
-                    <th class="mobile-hide">Tipo</th>
-                    <th class="mobile-hide">Grupo</th>
-                    <th class="mobile-hide">Ativo</th>
+                    <th>Tipo</th>
+                    <th>Grupo</th>
+                    <th>Ativo</th>
                     <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for tax in taxes %}
-                <tr data-id="{{ tax.id }}">
-                    <td class="checkbox-container">
+                <tr>
+                    <td>
                         <input type="checkbox" class="tax-select" data-id="{{ tax.id }}">
                     </td>
-                    <td data-label="Descrição">{{ tax.description }}</td>
-                    <td data-label="Sigla">{{ tax.acronym }}</td>
-                    <td data-label="Operador">{{ tax.get_calc_operator_display }}</td>
-                    <td data-label="Valor">{{ tax.value }}</td>
-                    <td class="mobile-hide" data-label="Tipo">{{ tax.get_type_display }}</td>
-                    <td class="mobile-hide" data-label="Grupo">{{ tax.get_group_display }}</td>
-                    <td class="mobile-hide" data-label="Ativo">{{ tax.enabled|yesno:"Sim,Não" }}</td>
-                    <td class="mobile-hide" data-label="Ações">
-                        <!-- <div class="btn-group"> -->
-                            <button class="btn btn-secondary btn-sm edit-tax" data-id="{{ tax.id }}">Editar</button>
-                            <button class="btn btn-danger btn-sm delete-tax" data-id="{{ tax.id }}" 
-                                    onclick="return confirm('Tem certeza que deseja excluir esta taxa/imposto?')">Excluir</button>
-                        <!-- </div> -->
+                    <td>{{ tax.description }}</td>
+                    <td>{{ tax.acronym }}</td>
+                    <td>{{ tax.get_calc_operator_display }}</td>
+                    <td>{{ tax.value }}</td>
+                    <td>{{ tax.get_type_display }}</td>
+                    <td>{{ tax.get_group_display }}</td>
+                    <td>{{ tax.enabled|yesno:"Sim,Não" }}</td>
+                    <td>
+                        <button class="btn btn-warning btn-sm edit-tax" data-id="{{ tax.id }}">Editar</button>
+                        <button class="btn btn-danger btn-sm delete-tax" data-id="{{ tax.id }}" 
+                            onclick="return confirm('Tem certeza que deseja excluir esta taxa/imposto?')">Excluir</button>
                     </td>
                 </tr>
                 {% empty %}
@@ -82,8 +83,6 @@
             </tbody>
         </table>
     </div>
-
-    <!-- Modal omitido para brevidade - permanece o mesmo -->
 
     <!-- Modal para Novo/Editar Taxa -->
     <div class="modal fade" id="taxModal" tabindex="-1" aria-labelledby="taxModalLabel" aria-hidden="true">
@@ -108,7 +107,6 @@
         </div>
     </div>
 {% endblock %}
-
 
 {% block extra_js %}
     {% load static %}

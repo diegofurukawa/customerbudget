@@ -85,14 +85,33 @@ def get_customer_data(request, customer_id):
     }
     return JsonResponse(data)
 
+# def search_customers(request):
+#     term = request.GET.get('term', '')
+#     customers = Customer.objects.filter(
+#         Q(name__icontains=term) | Q(document__icontains=term)
+#     )[:10]  # Limita a 10 resultados
+#     data = list(customers.values('id', 'name', 'phone', 'document'))
+#     return JsonResponse(data, safe=False)
+
 def search_customers(request):
     term = request.GET.get('term', '')
-    customers = Customer.objects.filter(
-        Q(name__icontains=term) | Q(document__icontains=term)
-    )[:10]  # Limita a 10 resultados
-    data = list(customers.values('id', 'name', 'phone', 'document'))
-    return JsonResponse(data, safe=False)
-
+    if term:
+        customers = Customer.objects.filter(
+            Q(name__icontains=term) |
+            Q(document__icontains=term)
+        ).values('id', 'name', 'phone', 'document')[:10]  # Limitando a 10 resultados
+        
+        # Formatando os dados para o response
+        customers_list = list(customers)
+        
+        # Garantindo que os campos nunca sejam None
+        for customer in customers_list:
+            customer['phone'] = customer.get('phone') or ''
+            customer['document'] = customer.get('document') or ''
+        
+        return JsonResponse(customers_list, safe=False)
+    
+    return JsonResponse([], safe=False)
 
 # Placeholder views for other menu items
 def agendamento(request):
@@ -177,11 +196,13 @@ class BudgetListView(ListView):
         return context
 
 
+
 class BudgetCreateView(View):
     def get(self, request):
         form = BudgetForm(initial={'status': 'CREATED'})
         item_formset = BudgetItemFormSet(prefix='items')
-        materials = Material.objects.all()
+        materials = Material.objects.filter(active=True)
+        
         return render(request, 'budget/budget_form.html', {
             'form': form,
             'item_formset': item_formset,
@@ -195,31 +216,42 @@ class BudgetCreateView(View):
         if form.is_valid() and item_formset.is_valid():
             try:
                 with transaction.atomic():
+                    # Save budget
                     budget = form.save(commit=False)
-                    if not budget.status:
-                        budget.status = 'CREATED'
+                    budget.status = 'CREATED'
                     budget.save()
+                    
+                    # Save budget items
                     instances = item_formset.save(commit=False)
                     for instance in instances:
                         instance.budget = budget
-                        instance.save()
+                        instance.save()  # This will trigger value calculations
+                    
+                    # Handle deleted items
+                    for deleted_item in item_formset.deleted_objects:
+                        deleted_item.delete()
+                    
+                    # Update budget totals
+                    budget.update_total_values()
+                    
                     messages.success(request, 'Orçamento criado com sucesso!')
                     return redirect('budget_list')
+            except ValidationError as e:
+                messages.error(request, str(e))
             except Exception as e:
                 messages.error(request, f'Erro ao salvar o orçamento: {str(e)}')
         else:
             if not form.is_valid():
                 messages.error(request, f'Erros no formulário principal: {form.errors}')
             if not item_formset.is_valid():
-                messages.error(request, f'Erros no formset de itens: {item_formset.errors}')
+                messages.error(request, f'Erros nos itens: {item_formset.errors}')
         
-        materials = Material.objects.all()
+        materials = Material.objects.filter(active=True)
         return render(request, 'budget/budget_form.html', {
             'form': form,
             'item_formset': item_formset,
             'materials': materials,
         })
-    
 
 class BudgetEditView(View):
     def get(self, request, pk):
@@ -230,7 +262,8 @@ class BudgetEditView(View):
         
         form = BudgetForm(instance=budget)
         item_formset = BudgetItemFormSet(instance=budget)
-        materials = Material.objects.all()
+        materials = Material.objects.filter(active=True)
+        
         return render(request, 'budget/budget_form.html', {
             'form': form,
             'item_formset': item_formset,
@@ -249,12 +282,30 @@ class BudgetEditView(View):
         item_formset = BudgetItemFormSet(request.POST, instance=budget)
         
         if form.is_valid() and item_formset.is_valid():
-            form.save()
-            item_formset.save()
-            messages.success(request, 'Orçamento atualizado com sucesso!')
-            return redirect('budget_list')
+            try:
+                with transaction.atomic():
+                    budget = form.save()
+                    
+                    # Save budget items
+                    instances = item_formset.save(commit=False)
+                    for instance in instances:
+                        instance.save()  # This will trigger value calculations
+                    
+                    # Handle deleted items
+                    for deleted_item in item_formset.deleted_objects:
+                        deleted_item.delete()
+                    
+                    # Update budget totals
+                    budget.update_total_values()
+                    
+                    messages.success(request, 'Orçamento atualizado com sucesso!')
+                    return redirect('budget_list')
+            except ValidationError as e:
+                messages.error(request, str(e))
+            except Exception as e:
+                messages.error(request, f'Erro ao atualizar o orçamento: {str(e)}')
         
-        materials = Material.objects.all()
+        materials = Material.objects.filter(active=True)
         return render(request, 'budget/budget_form.html', {
             'form': form,
             'item_formset': item_formset,
@@ -262,49 +313,8 @@ class BudgetEditView(View):
             'edit_mode': True,
             'budget': budget,
         })
+    
 
-
-    def post(self, request, pk):
-        #budget = get_object_or_404(Budget, pk=pk, enabled=True)
-        budget = get_object_or_404(Budget, pk=pk)
-        form = BudgetForm(request.POST, instance=budget)
-        if form.is_valid():
-            budget = form.save()
-            item_formset = BudgetItemFormSet(request.POST, instance=budget)
-            if item_formset.is_valid():
-                items = item_formset.save(commit=False)
-                for item in items:
-                    item.enabled = True
-                    item.save()
-                for item in item_formset.deleted_objects:
-                    item.enabled = False
-                    item.save()
-                messages.success(request, 'Orçamento atualizado com sucesso!')
-                return redirect('budget_list')
-        else:
-            item_formset = BudgetItemFormSet(request.POST, instance=budget)
-        
-        customer_search_form = CustomerSearchForm(request.POST)
-        if customer_search_form.is_valid():
-            search_query = customer_search_form.cleaned_data['search']
-            customers = Customer.objects.filter(
-                Q(name__icontains=search_query) |
-                Q(email__icontains=search_query) |
-                Q(phone__icontains=search_query)
-            )
-        else:
-            customers = Customer.objects.all()
-        
-        materials = Material.objects.all()
-        return render(request, 'budget/budget_form.html', {
-            'form': form,
-            'item_formset': item_formset,
-            'customer_search_form': customer_search_form,
-            'customers': customers,
-            'materials': materials,
-            'edit_mode': True,
-            'budget': budget,
-        })
 
 def remove_budget_item(request, pk):
     item = get_object_or_404(BudgetItem, pk=pk)
@@ -861,21 +871,6 @@ def material_list(request):
     }
     return render(request, 'budget/material_list.html', context)
 
-# def material_list(request):
-#     materials = Material.objects.all()
-#     materials_with_prices = []
-#     for material in materials:
-#         materials_with_prices.append({
-#             'id': material.id,
-#             'full_name': material.full_name,
-#             'nick_name': material.nick_name,
-#             'ean_code': material.ean_code,
-#             'active': material.active,
-#             'current_price': material.get_current_price()
-#         })
-#     return render(request, 'budget/material_list.html', {'materials': materials_with_prices})
-
-
 def material_create_update(request):
     material_id = request.POST.get('material_id')
     if material_id:
@@ -966,3 +961,23 @@ def delete_customers(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+    
+
+# views.py
+def get_material_current_price(request, material_id):
+    try:
+        material = get_object_or_404(Material, id=material_id)
+        price_data = material.get_current_price()
+        
+        return JsonResponse({
+            'success': True,
+            'value': price_data['value'],
+            'tax_value': price_data['tax_value'],
+            'value_total': price_data['value_total']
+        })
+    except Exception as e:
+        print(f"Error getting price for material {material_id}: {str(e)}")  # Debug log
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.db.models import Sum, F, Q
 from django.core.validators import RegexValidator, MinValueValidator
@@ -49,20 +50,27 @@ class Material(models.Model):
         return self.full_name
     
     def get_current_price(self):
-        """
-        Retorna o valor total atual do material baseado na tabela Price_List.
-        Considera apenas preços ativos e dentro do período de validade.
-        """
         current_date = timezone.now().date()
-        current_price = Price_List.objects.filter(
+        price = Price_List.objects.filter(
             material=self,
             active=True,
             start_date__lte=current_date
-        ).filter(
-            Q(end_date__gte=current_date) | Q(end_date__isnull=True)
-        ).order_by('-start_date', '-id').first()
+        ).exclude(
+            end_date__lt=current_date
+        ).order_by('-start_date').first()
         
-        return current_price.value_total if current_price else 0
+        if not price:
+            return {
+                'value': 0,
+                'tax_value': 0,
+                'value_total': 0
+            }
+            
+        return {
+            'value': float(price.value),
+            'tax_value': float(price.tax_value),
+            'value_total': float(price.value_total)
+        }
 
     def get_current_price_details(self):
         """
@@ -120,7 +128,27 @@ class Budget(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     enabled = models.BooleanField(default=True, verbose_name="Ativo")
     installation_date = models.DateField(null=True, blank=True)  # Adicionando o campo installation_date
-    
+  
+    # New fields
+    value = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        verbose_name="Valor"
+    )
+    tax_value = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        verbose_name="Valor dos Impostos"
+    )
+    value_total = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        verbose_name="Valor Total"
+    )
+
     def get_status_display(self):
         return dict(self.STATUS_CHOICES)[self.status]
     
@@ -129,8 +157,22 @@ class Budget(models.Model):
             total=Sum(F('quantity') * F('material__cost_value'))
         )['total'] or 0
 
+    def update_total_values(self):
+        """
+        Updates the budget's total values based on its active items
+        """
+        active_items = self.items.filter(enabled=True)
+        self.value = active_items.aggregate(total=Sum('value'))['total'] or Decimal('0.00')
+        self.tax_value = active_items.aggregate(total=Sum('tax_value'))['total'] or Decimal('0.00')
+        self.value_total = active_items.aggregate(total=Sum('value_total'))['total'] or Decimal('0.00')
+        self.save()
+
     def __str__(self):
         return f"Orçamento {self.id} - {self.customer.name}"
+
+    class Meta:
+        verbose_name = "Orçamento"
+        verbose_name_plural = "Orçamentos"
 
 class BudgetItem(models.Model):
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='items')
@@ -139,10 +181,59 @@ class BudgetItem(models.Model):
     enabled = models.BooleanField(default=True)  # Novo campo
     installation_date = models.DateField(null=True, blank=True)
 
+    # New fields
+    value = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        verbose_name="Valor Unitário"
+    )
+    tax_value = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        verbose_name="Valor dos Impostos Unitário"
+    )
+    value_total = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        verbose_name="Valor Total"
+    )
+
+    def save(self, *args, **kwargs):
+        # Get current price from Price_List
+        current_price = self.material.prices.filter(
+            active=True,
+            start_date__lte=timezone.now().date(),
+            end_date__gte=timezone.now().date()
+        ).order_by('-start_date').first()
+
+        if current_price:
+            self.value = current_price.value
+            self.tax_value = (current_price.tax_value * self.quantity) if current_price.tax_value else Decimal('0.00')
+            self.value_total = current_price.value_total * self.quantity
+        else:
+            self.value = Decimal('0.00')
+            self.tax_value = Decimal('0.00')
+            self.value_total = Decimal('0.00')
+
+        super().save(*args, **kwargs)
+        
+        # Update budget totals
+        self.budget.update_total_values()
+
+    def delete(self, *args, **kwargs):
+        budget = self.budget
+        super().delete(*args, **kwargs)
+        budget.update_total_values()
+
     def __str__(self):
         return f"{self.material.full_name} - {self.quantity}"
-    
 
+    class Meta:
+        verbose_name = "Item do Orçamento"
+        verbose_name_plural = "Itens do Orçamento"
 
 class Tax(models.Model):
     TYPE_CHOICES = [
@@ -186,12 +277,6 @@ class Tax(models.Model):
     class Meta:
         verbose_name = "Taxa/Imposto"
         verbose_name_plural = "Taxas e Impostos"
-
-
-from django.db import models
-from django.core.validators import MinValueValidator
-from decimal import Decimal
-from django.utils import timezone
 
 class Price_List(models.Model):
     material = models.ForeignKey('Material', on_delete=models.CASCADE)

@@ -28,12 +28,18 @@
             <button class="btn btn-primary" id="newMaterialBtn">+ Novo Material</button>
             <!-- <button id="editMaterialBtn" class="btn btn-secondary" disabled>Editar Material</button> -->
         </div>
-        <div class="search-container mt-2 mt-md-0">
+        <div class="search-container">
             <div class="input-group">
                 <input type="text" id="searchInput" class="form-control" placeholder="Pesquisar por...">
                 <button class="btn btn-success" id="searchButton">PESQUISAR</button>
             </div>
         </div>
+        <!-- <div class="search-container mt-2 mt-md-0">
+            <div class="input-group">
+                <input type="text" id="searchInput" class="form-control" placeholder="Pesquisar por...">
+                <button class="btn btn-success" id="searchButton">PESQUISAR</button>
+            </div>
+        </div> -->
         <div class="action-buttons mt-2 mt-md-0">
             <button class="btn btn-secondary" disabled>EXPORTAR PARA EXCEL</button>
             <span class="btn btn-light">TOTAL: {{ materials.count }} material(is)</span>

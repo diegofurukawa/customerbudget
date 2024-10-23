@@ -1,205 +1,170 @@
 {% extends 'base.html' %}
-{% load static %}
 
 {% block title %}{% if edit_mode %}Editar{% else %}Criar{% endif %} Orçamento{% endblock %}
 
 {% block page_title %}{% if edit_mode %}EDITAR{% else %}CRIAR{% endif %} ORÇAMENTO{% endblock %}
 
-{% block extra_css %}
-<style>
-    .customer-info {
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-    .customer-info p {
-        margin-bottom: 5px;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <form method="post" id="budget-form">
     {% csrf_token %}
-    {{ form.status }}  <!-- Campo status oculto -->
-    
-    <div class="mb-3">
-        <h4>Selecionar Cliente</h4>
-        <div class="d-flex">
-            <input type="text" id="customer_search" class="form-control me-2" placeholder="Pesquisar cliente por nome ou documento">
-            <button type="button" id="search_customer_btn" class="btn btn-primary">Pesquisar Cliente</button>
+
+    <!-- Seção de Cliente -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Selecionar Cliente</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="d-flex gap-2">
+                    <input type="text" id="customer_search" class="form-control" placeholder="Pesquisar cliente por nome ou documento">
+                    <button type="button" id="search_customer_btn" class="btn btn-primary">Pesquisar Cliente</button>
+                </div>
+            </div>
+
+            <div id="customer_results" class="mb-3" style="display: none;">
+                <h6>Resultados da Pesquisa:</h6>
+                <ul id="customer_list" class="list-group">
+                    <!-- Os resultados da pesquisa serão inseridos aqui -->
+                </ul>
+            </div>
+
+            <div class="customer-info">
+                <input type="hidden" id="id_customer" name="customer" value="{% if form.instance.customer %}{{ form.instance.customer.id }}{% endif %}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <p><strong>Cliente:</strong> <span id="selected_customer_name">{% if form.instance.customer %}{{ form.instance.customer.name }}{% else %}Nenhum cliente selecionado{% endif %}</span></p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Telefone:</strong> <span id="selected_customer_phone">{% if form.instance.customer %}{{ form.instance.customer.phone }}{% endif %}</span></p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Documento:</strong> <span id="selected_customer_document">{% if form.instance.customer %}{{ form.instance.customer.document }}{% endif %}</span></p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div id="customer_results" class="mb-3" style="display: none;">
-        <h5>Resultados da Pesquisa:</h5>
-        <ul id="customer_list" class="list-group">
-            <!-- Os resultados da pesquisa serão inseridos aqui via JavaScript -->
-        </ul>
+    <!-- Seção de Itens -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Itens do Orçamento</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <select id="material_select" class="form-control">
+                        <option value="">Selecione um material</option>
+                        {% for material in materials %}
+                            <option value="{{ material.id }}">{{ material.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <input type="number" id="quantity_input" class="form-control" placeholder="Quantidade" min="0.01" step="0.01">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" id="add_item_btn" class="btn btn-success w-100">Adicionar Item</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table" id="items_table">
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th>Quantidade</th>
+                            <th class="text-end">Valor Unit.</th>
+                            <th class="text-end">Valor Imposto</th>
+                            <th class="text-end">Valor Total</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in item_formset %}
+                            <tr>
+                                <td>
+                                    {{ form.material }}
+                                    {{ form.id }}
+                                </td>
+                                <td>{{ form.quantity }}</td>
+                                <td class="text-end">{{ form.instance.material.get_current_price.value|floatformat:2 }}</td>
+                                <td class="text-end">{{ form.instance.material.get_current_price.tax_value|floatformat:2 }}</td>
+                                <td class="text-end">{{ form.instance.material.get_current_price.value_total|floatformat:2 }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-danger btn-sm remove-item">Remover</button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {{ item_formset.management_form }}
+        </div>
     </div>
 
-    <div class="customer-info mb-3">
-        <h5>Informações do Cliente</h5>
-        <p><strong>Cliente:</strong> <span id="selected_customer_name">{% if form.instance.customer %}{{ form.instance.customer.name }}{% else %}Nenhum cliente selecionado{% endif %}</span></p>
-        <p><strong>Telefone:</strong> <span id="selected_customer_phone">{% if form.instance.customer %}{{ form.instance.customer.phone }}{% endif %}</span></p>
-        <p><strong>Documento:</strong> <span id="selected_customer_document">{% if form.instance.customer %}{{ form.instance.customer.document }}{% endif %}</span></p>
-        {{ form.customer }}
+    <!-- Seção de Totais -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Totais</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Subtotal:</label>
+                        <div class="h4">R$ <span id="subtotal">0.00</span></div>
+                        <input type="hidden" id="budget_value" name="budget_value" value="0.00">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Total Impostos:</label>
+                        <div class="h4">R$ <span id="tax_total">0.00</span></div>
+                        <input type="hidden" id="budget_tax_value" name="budget_tax_value" value="0.00">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Total Geral:</label>
+                        <div class="h4">R$ <span id="grand_total">0.00</span></div>
+                        <input type="hidden" id="budget_value_total" name="budget_value_total" value="0.00">
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    
-    <h4>Itens do Orçamento</h4>
-    <div class="mb-3">
-        <select id="material_select" class="form-control">
-            <option value="">Selecione um material</option>
-            {% for material in materials %}
-                <option value="{{ material.id }}">{{ material.full_name }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="mb-3">
-        <input type="number" id="quantity_input" class="form-control" placeholder="Quantidade" min="0.01" step="0.01">
-    </div>
-    <button type="button" id="add_item_btn" class="btn btn-success mb-3">Adicionar Item</button>
 
-    <table class="table" id="items_table">
-        <thead>
-            <tr>
-                <th>Material</th>
-                <th>Quantidade</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for form in item_formset %}
-                <tr>
-                    <td>
-                        {{ form.material }}
-                        {{ form.id }}
-                    </td>
-                    <td>{{ form.quantity }}</td>
-                    <td>
-                        <button type="button" class="btn btn-danger btn-sm remove-item">Remover</button>
-                    </td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
-    {{ item_formset.management_form }}
-
-    <div class="mt-3">
-        <button type="submit" class="btn btn-primary">{% if edit_mode %}Atualizar{% else %}Salvar{% endif %} Orçamento</button>
+    <!-- Botões de Ação -->
+    <div class="d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-primary">
+            {% if edit_mode %}Atualizar{% else %}Salvar{% endif %} Orçamento
+        </button>
         <a href="{% url 'budget_list' %}" class="btn btn-secondary">Cancelar</a>
     </div>
 </form>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .customer-result {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .customer-result:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+
+
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM fully loaded and parsed');
-
-    const searchCustomerBtn = document.getElementById('search_customer_btn');
-    const addItemBtn = document.getElementById('add_item_btn');
-    const customerList = document.getElementById('customer_list');
-    const itemsTable = document.getElementById('items_table');
-    const itemsTableBody = itemsTable ? itemsTable.querySelector('tbody') : null;
-
-    if (searchCustomerBtn) {
-        searchCustomerBtn.addEventListener('click', function() {
-            console.log('Search button clicked');
-            const searchTerm = document.getElementById('customer_search').value;
-            if (searchTerm) {
-                fetch(`{% url 'search_customers' %}?term=${encodeURIComponent(searchTerm)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log('Search results:', data);
-                        if (customerList) {
-                            customerList.innerHTML = '';
-                            if (data.length > 0) {
-                                data.forEach(customer => {
-                                    const li = document.createElement('li');
-                                    li.className = 'list-group-item customer-result';
-                                    li.textContent = `${customer.name} - ${customer.document}`;
-                                    li.dataset.id = customer.id;
-                                    li.dataset.name = customer.name;
-                                    li.dataset.phone = customer.phone;
-                                    li.dataset.document = customer.document;
-                                    customerList.appendChild(li);
-                                });
-                                document.getElementById('customer_results').style.display = 'block';
-                            } else {
-                                customerList.innerHTML = '<li class="list-group-item">Nenhum cliente encontrado</li>';
-                                document.getElementById('customer_results').style.display = 'block';
-                            }
-                        }
-                    })
-                    .catch(error => console.error('Error:', error));
-            }
-        });
-    } else {
-        console.error('Search button not found');
-    }
-
-    if (addItemBtn && itemsTableBody) {
-        addItemBtn.addEventListener('click', function() {
-            console.log('Add item button clicked');
-            const materialSelect = document.getElementById('material_select');
-            const quantityInput = document.getElementById('quantity_input');
-            const materialId = materialSelect.value;
-            const materialName = materialSelect.options[materialSelect.selectedIndex].text;
-            const quantity = quantityInput.value;
-
-            if (materialId && quantity > 0) {
-                const newRow = itemsTableBody.insertRow();
-                newRow.innerHTML = `
-                    <td>
-                        <input type="hidden" name="items-${itemsTableBody.rows.length - 1}-material" value="${materialId}">
-                        <input type="hidden" name="items-${itemsTableBody.rows.length - 1}-id" value="">
-                        ${materialName}
-                    </td>
-                    <td>
-                        <input type="number" name="items-${itemsTableBody.rows.length - 1}-quantity" value="${quantity}" step="0.01" min="0.01" class="form-control">
-                    </td>
-                    <td>
-                        <button type="button" class="btn btn-danger btn-sm remove-item">Remover</button>
-                    </td>
-                `;
-                materialSelect.value = '';
-                quantityInput.value = '';
-                updateTotalForms();
-            } else {
-                alert("Por favor, selecione um material e insira uma quantidade válida.");
-            }
-        });
-    } else {
-        console.error('Add item button or items table not found');
-    }
-
-    document.addEventListener('click', function(e) {
-        if (e.target && e.target.classList.contains('customer-result')) {
-            console.log('Customer selected:', e.target.dataset);
-            document.getElementById('id_customer').value = e.target.dataset.id;
-            document.getElementById('selected_customer_name').textContent = e.target.dataset.name;
-            document.getElementById('selected_customer_phone').textContent = e.target.dataset.phone;
-            document.getElementById('selected_customer_document').textContent = e.target.dataset.document;
-            document.getElementById('customer_results').style.display = 'none';
-            document.getElementById('customer_search').value = '';
-        }
-
-        if (e.target && e.target.classList.contains('remove-item')) {
-            console.log('Remove item clicked');
-            e.target.closest('tr').remove();
-            updateTotalForms();
-        }
-    });
-
-    function updateTotalForms() {
-        const totalForms = document.getElementById('id_items-TOTAL_FORMS');
-        if (totalForms && itemsTableBody) {
-            totalForms.value = itemsTableBody.rows.length;
-        }
-    }
-});
-</script>
+    {% load static %}    
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>    
+        <script src="{% static 'js/budget_form.js' %}"></script>
 {% endblock %}
