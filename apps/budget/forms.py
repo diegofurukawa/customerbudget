@@ -113,15 +113,10 @@ class BudgetForm(forms.ModelForm):
             'status': forms.HiddenInput(),
         }
 
-    def save(self, commit=True):
-        instance = super().save(commit=False)
-        
-        if commit:
-            instance.save()
-            # Update budget totals based on all active items
-            instance.update_total_values()
-        
-        return instance
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:  # Se for um novo orçamento
+            self.initial['status'] = 'CREATED'
 
 # Create the formset after defining the form
 BudgetItemFormSet = forms.inlineformset_factory(

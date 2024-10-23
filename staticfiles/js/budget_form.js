@@ -11,7 +11,8 @@ const SELECTORS = {
     SELECTED_CUSTOMER_NAME: 'selected_customer_name',
     SELECTED_CUSTOMER_PHONE: 'selected_customer_phone',
     SELECTED_CUSTOMER_DOCUMENT: 'selected_customer_document',
-    CUSTOMER_ID_INPUT: 'id_customer'
+    CUSTOMER_ID_INPUT: 'id_customer',
+    STATUS_INPUT: 'id_status'
 };
 
 class BudgetForm {
@@ -21,6 +22,7 @@ class BudgetForm {
         if (!this.validateRequiredElements()) {
             throw new Error('Elementos obrigatórios não encontrados');
         }
+        this.initializeFormDefaults();
         this.initializeEventListeners();
         this.initializeTotals();
     }
@@ -36,6 +38,23 @@ class BudgetForm {
         ];
 
         return requiredElements.every(id => document.getElementById(id));
+    }
+
+    initializeFormDefaults() {
+        // Inicializa o status do orçamento
+        const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
+        if (statusInput && !statusInput.value) {
+            statusInput.value = 'CREATED';
+        }
+
+        // Inicializa os campos de valor do orçamento se necessário
+        const budgetValueInputs = ['budget_value', 'budget_tax_value', 'budget_value_total'];
+        budgetValueInputs.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input && !input.value) {
+                input.value = '0.00';
+            }
+        });
     }
 
     initializeEventListeners() {
@@ -342,6 +361,12 @@ class BudgetForm {
     handleSubmit(event) {
         event.preventDefault();
         
+        // Garante que o status está definido
+        const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
+        if (statusInput && !statusInput.value) {
+            statusInput.value = 'CREATED';
+        }
+        
         // Validação básica
         const customerId = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT)?.value;
         if (!customerId) {
@@ -354,42 +379,48 @@ class BudgetForm {
             alert('Por favor, adicione pelo menos um item ao orçamento');
             return;
         }
+// Se tudo estiver ok, submete o formulário
+event.target.submit();
+}
 
-        // Se tudo estiver ok, submete o formulário
-        event.target.submit();
-    }
+handleError(message, error) {
+    console.error(message, error);
+    alert(`${message}. ${error.message || 'Por favor, tente novamente.'}`);
+}
 
-    handleError(message, error) {
-        console.error(message, error);
-        alert(`${message}. ${error.message || 'Por favor, tente novamente.'}`);
-    }
+resetInputs(materialSelect) {
+    materialSelect.value = '';
+    document.getElementById(SELECTORS.QUANTITY_INPUT).value = '';
+    this.validateForm();
+}
 
-    resetInputs(materialSelect) {
-        materialSelect.value = '';
-        document.getElementById(SELECTORS.QUANTITY_INPUT).value = '';
-        this.validateForm();
-    }
-
-    formatCurrency(value) {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(value);
-    }
+formatCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(value);
+}
 }
 
 // Initialize the form when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    try {
-        if (!document.getElementById('budget-form')) {
-            console.error('Formulário não encontrado');
-            return;
-        }
-
-        const budgetForm = new BudgetForm('items');
-        console.log('Budget form initialized successfully');
-    } catch (error) {
-        console.error('Error initializing budget form:', error);
-        alert('Erro ao inicializar o formulário. Por favor, recarregue a página.');
+try {
+    const budgetForm = document.getElementById('budget-form');
+    if (!budgetForm) {
+        console.error('Formulário não encontrado');
+        return;
     }
+
+    // Define o status inicial no carregamento da página
+    const statusInput = document.getElementById(SELECTORS.STATUS_INPUT);
+    if (statusInput && !statusInput.value) {
+        statusInput.value = 'CREATED';
+    }
+
+    const budgetFormInstance = new BudgetForm('items');
+    console.log('Budget form initialized successfully');
+} catch (error) {
+    console.error('Error initializing budget form:', error);
+    alert('Erro ao inicializar o formulário. Por favor, recarregue a página.');
+}
 });

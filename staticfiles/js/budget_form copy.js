@@ -1,4 +1,4 @@
-// Constants for DOM selectors
+// Constants
 const SELECTORS = {
     TOTAL_FORMS: (prefix) => `id_${prefix}-TOTAL_FORMS`,
     ADD_ITEM_BTN: 'add_item_btn',
@@ -10,15 +10,32 @@ const SELECTORS = {
     CUSTOMER_RESULTS: 'customer_results',
     SELECTED_CUSTOMER_NAME: 'selected_customer_name',
     SELECTED_CUSTOMER_PHONE: 'selected_customer_phone',
-    SELECTED_CUSTOMER_DOCUMENT: 'selected_customer_document'
+    SELECTED_CUSTOMER_DOCUMENT: 'selected_customer_document',
+    CUSTOMER_ID_INPUT: 'id_customer'
 };
 
 class BudgetForm {
     constructor(itemFormsetPrefix) {
         this.itemFormsetPrefix = itemFormsetPrefix;
         this.totalForms = document.getElementById(SELECTORS.TOTAL_FORMS(itemFormsetPrefix));
+        if (!this.validateRequiredElements()) {
+            throw new Error('Elementos obrigatórios não encontrados');
+        }
         this.initializeEventListeners();
         this.initializeTotals();
+    }
+
+    validateRequiredElements() {
+        const requiredElements = [
+            SELECTORS.MATERIAL_SELECT,
+            SELECTORS.QUANTITY_INPUT,
+            SELECTORS.ITEMS_TABLE,
+            'subtotal',
+            'tax_total',
+            'grand_total'
+        ];
+
+        return requiredElements.every(id => document.getElementById(id));
     }
 
     initializeEventListeners() {
@@ -39,20 +56,31 @@ class BudgetForm {
             }
         });
 
+        // Material Select Change
+        document.getElementById(SELECTORS.MATERIAL_SELECT)?.addEventListener('change', () => this.validateForm());
+
+        // Quantity Input Change
+        document.getElementById(SELECTORS.QUANTITY_INPUT)?.addEventListener('input', () => this.validateForm());
+
         // Customer Search
         this.initializeCustomerSearch();
 
-        // Material Selection
-        const materialSelect = document.getElementById(SELECTORS.MATERIAL_SELECT);
-        materialSelect?.addEventListener('change', () => this.validateForm());
-
-        // Quantity Input
-        const quantityInput = document.getElementById(SELECTORS.QUANTITY_INPUT);
-        quantityInput?.addEventListener('change', () => this.validateForm());
+        // Form Submission
+        document.getElementById('budget-form')?.addEventListener('submit', (e) => this.handleSubmit(e));
     }
 
     initializeTotals() {
         this.updateTotals();
+    }
+
+    validateForm() {
+        const materialId = document.getElementById(SELECTORS.MATERIAL_SELECT).value;
+        const quantity = parseFloat(document.getElementById(SELECTORS.QUANTITY_INPUT).value);
+        const addButton = document.getElementById(SELECTORS.ADD_ITEM_BTN);
+        
+        if (addButton) {
+            addButton.disabled = !materialId || !quantity || quantity <= 0;
+        }
     }
 
     async handleAddItem() {
@@ -67,15 +95,15 @@ class BudgetForm {
             }
 
             const priceData = await this.fetchMaterialPrice(materialId);
-            console.log('Price data:', priceData); // Debug log
-
-            if (priceData && priceData.success !== false) {
-                this.addItemToTable(materialId, materialName, quantity, priceData);
-                this.resetInputs(materialSelect);
-                this.updateTotals();
-            } else {
+            if (!priceData.success) {
                 throw new Error(priceData.error || 'Erro ao obter preço do material');
             }
+
+            this.addItemToTable(materialId, materialName, quantity, priceData);
+            this.resetInputs(materialSelect);
+            this.updateTotals();
+            this.validateForm();
+
         } catch (error) {
             this.handleError('Erro ao adicionar item', error);
         }
@@ -95,30 +123,21 @@ class BudgetForm {
 
     async fetchMaterialPrice(materialId) {
         try {
-            console.log(`Fetching price for material ID: ${materialId}`);
-            const response = await fetch(`/materials/${materialId}/current-price/`, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-
+            const response = await fetch(`/materials/${materialId}/current-price/`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-
             const data = await response.json();
-            console.log('Price data received:', data);
-
             return {
-                value: data.value || 0,
-                tax_value: data.tax_value || 0,
-                value_total: data.value_total || data.value || 0
+                success: true,
+                ...data
             };
         } catch (error) {
             console.error('Error fetching material price:', error);
-            throw new Error('Erro ao obter preço do material');
+            return {
+                success: false,
+                error: error.message
+            };
         }
     }
 
@@ -194,15 +213,24 @@ class BudgetForm {
         let taxTotal = 0;
         let grandTotal = 0;
         
-        document.querySelectorAll(`#${SELECTORS.ITEMS_TABLE} tbody tr`).forEach(row => {
-            const quantity = parseFloat(row.querySelector('.quantity-input').value) || 0;
-            const value = parseFloat(row.querySelector('input[name$="-value"]').value) || 0;
-            const taxValue = parseFloat(row.querySelector('input[name$="-tax_value"]').value) || 0;
-            
-            subtotal += quantity * value;
-            taxTotal += quantity * taxValue;
-            grandTotal += quantity * (value + taxValue);
-        });
+        const tbody = document.querySelector(`#${SELECTORS.ITEMS_TABLE} tbody`);
+        if (tbody) {
+            tbody.querySelectorAll('tr').forEach(row => {
+                const quantityInput = row.querySelector('.quantity-input');
+                const valueInput = row.querySelector('input[name$="-value"]');
+                const taxValueInput = row.querySelector('input[name$="-tax_value"]');
+                
+                if (quantityInput && valueInput && taxValueInput) {
+                    const quantity = parseFloat(quantityInput.value) || 0;
+                    const value = parseFloat(valueInput.value) || 0;
+                    const taxValue = parseFloat(taxValueInput.value) || 0;
+                    
+                    subtotal += quantity * value;
+                    taxTotal += quantity * taxValue;
+                    grandTotal += quantity * (value + taxValue);
+                }
+            });
+        }
         
         this.updateTotalDisplays(subtotal, taxTotal, grandTotal);
     }
@@ -249,11 +277,15 @@ class BudgetForm {
 
     async handleCustomerSearch() {
         const searchTerm = document.getElementById(SELECTORS.CUSTOMER_SEARCH).value;
-        if (!searchTerm) return;
+        if (!searchTerm) {
+            alert('Por favor, digite um termo para pesquisa');
+            return;
+        }
 
         try {
             const response = await fetch(`/customers/search/?term=${encodeURIComponent(searchTerm)}`);
             if (!response.ok) throw new Error('Erro na busca');
+            
             const data = await response.json();
             this.renderCustomerResults(data);
         } catch (error) {
@@ -274,9 +306,9 @@ class BudgetForm {
                 li.dataset.phone = customer.phone || '';
                 li.dataset.document = customer.document || '';
                 li.innerHTML = `
-                    ${customer.name}<br>
-                    ${customer.document ? `Documento: ${customer.document}<br>` : ''}
-                    ${customer.phone ? `Telefone: ${customer.phone}` : ''}
+                    <strong>${customer.name}</strong>
+                    ${customer.document ? `<br>Documento: ${customer.document}` : ''}
+                    ${customer.phone ? `<br>Telefone: ${customer.phone}` : ''}
                 `;
                 customerList.appendChild(li);
             });
@@ -291,44 +323,69 @@ class BudgetForm {
     }
 
     handleCustomerSelection(customerElement) {
-        const customerId = customerElement.dataset.id;
-        const name = customerElement.dataset.name;
-        const phone = customerElement.dataset.phone;
-        const document = customerElement.dataset.document;
+        const updateElement = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value || '';
+        };
 
-        document.getElementById('id_customer').value = customerId;
-        document.getElementById(SELECTORS.SELECTED_CUSTOMER_NAME).textContent = name;
-        document.getElementById(SELECTORS.SELECTED_CUSTOMER_PHONE).textContent = phone;
-        document.getElementById(SELECTORS.SELECTED_CUSTOMER_DOCUMENT).textContent = document;
-        
+        updateElement(SELECTORS.SELECTED_CUSTOMER_NAME, customerElement.dataset.name);
+        updateElement(SELECTORS.SELECTED_CUSTOMER_PHONE, customerElement.dataset.phone);
+        updateElement(SELECTORS.SELECTED_CUSTOMER_DOCUMENT, customerElement.dataset.document);
+
+        const customerIdInput = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT);
+        if (customerIdInput) customerIdInput.value = customerElement.dataset.id;
+
         document.getElementById(SELECTORS.CUSTOMER_RESULTS).style.display = 'none';
         document.getElementById(SELECTORS.CUSTOMER_SEARCH).value = '';
     }
 
+    handleSubmit(event) {
+        event.preventDefault();
+        
+        // Validação básica
+        const customerId = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT)?.value;
+        if (!customerId) {
+            alert('Por favor, selecione um cliente');
+            return;
+        }
+
+        const items = document.querySelectorAll(`#${SELECTORS.ITEMS_TABLE} tbody tr`);
+        if (items.length === 0) {
+            alert('Por favor, adicione pelo menos um item ao orçamento');
+            return;
+        }
+
+        // Se tudo estiver ok, submete o formulário
+        event.target.submit();
+    }
+
     handleError(message, error) {
         console.error(message, error);
-        alert(`${message}. Detalhes: ${error.message}`);
+        alert(`${message}. ${error.message || 'Por favor, tente novamente.'}`);
     }
 
     resetInputs(materialSelect) {
         materialSelect.value = '';
         document.getElementById(SELECTORS.QUANTITY_INPUT).value = '';
+        this.validateForm();
     }
 
-    validateForm() {
-        const materialId = document.getElementById(SELECTORS.MATERIAL_SELECT).value;
-        const quantity = parseFloat(document.getElementById(SELECTORS.QUANTITY_INPUT).value);
-        const addButton = document.getElementById(SELECTORS.ADD_ITEM_BTN);
-        
-        if (addButton) {
-            addButton.disabled = !materialId || !quantity || quantity <= 0;
-        }
+    formatCurrency(value) {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(value);
     }
 }
 
 // Initialize the form when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     try {
+        if (!document.getElementById('budget-form')) {
+            console.error('Formulário não encontrado');
+            return;
+        }
+
         const budgetForm = new BudgetForm('items');
         console.log('Budget form initialized successfully');
     } catch (error) {

@@ -30,6 +30,7 @@
 
             <div class="customer-info">
                 <input type="hidden" id="id_customer" name="customer" value="{% if form.instance.customer %}{{ form.instance.customer.id }}{% endif %}">
+                <input type="hidden" name="status" id="id_status" value="CREATED">
                 <div class="row">
                     <div class="col-md-4">
                         <p><strong>Cliente:</strong> <span id="selected_customer_name">{% if form.instance.customer %}{{ form.instance.customer.name }}{% else %}Nenhum cliente selecionado{% endif %}</span></p>
