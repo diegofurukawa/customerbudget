@@ -32,6 +32,7 @@ class Customer(models.Model):
         return self.name
 
     class Meta:
+        #app_label = 'budget'
         verbose_name = "Cliente"
         verbose_name_plural = "Clientes"
         ordering = ['name']
@@ -98,6 +99,7 @@ class Material(models.Model):
         return None
 
     class Meta:
+        app_label = 'budget'
         verbose_name = "Material"
         verbose_name_plural = "Materiais"
         ordering = ['full_name']
@@ -171,6 +173,7 @@ class Budget(models.Model):
         return f"Orçamento {self.id} - {self.customer.name}"
 
     class Meta:
+        app_label = 'budget'
         verbose_name = "Orçamento"
         verbose_name_plural = "Orçamentos"
 
@@ -232,6 +235,7 @@ class BudgetItem(models.Model):
         return f"{self.material.full_name} - {self.quantity}"
 
     class Meta:
+        app_label = 'budget'
         verbose_name = "Item do Orçamento"
         verbose_name_plural = "Itens do Orçamento"
 
@@ -275,6 +279,7 @@ class Tax(models.Model):
         return f"{self.description} ({self.acronym})"
 
     class Meta:
+        app_label = 'budget'
         verbose_name = "Taxa/Imposto"
         verbose_name_plural = "Taxas e Impostos"
 
@@ -315,6 +320,7 @@ class Price_List(models.Model):
         return f"{self.material.full_name} - R$ {self.value_total} ({self.start_date} to {self.end_date or 'No end date'})"
 
     class Meta:
+        app_label = 'budget'
         ordering = ['-start_date', 'material__full_name']
         verbose_name = "Lista de Preços"
         verbose_name_plural = "Listas de Preços"

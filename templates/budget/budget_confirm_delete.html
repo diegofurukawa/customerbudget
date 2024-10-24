@@ -1,0 +1,14 @@
+<!-- templates/budget/budget_confirm_delete.html -->
+{% extends 'base.html' %}  <!-- ajuste para seu template base -->
+
+{% block content %}
+<div class="container">
+    <h2>Deletar Orçamento</h2>
+    <form method="post">
+        {% csrf_token %}
+        <p>Tem certeza que deseja deletar o orçamento "{{ object }}"?</p>
+        <button type="submit" class="btn btn-danger">Confirmar Deleção</button>
+        <a href="{% url 'budget_list' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

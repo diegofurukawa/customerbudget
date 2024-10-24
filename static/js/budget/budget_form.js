@@ -3,13 +3,15 @@ import { SELECTORS } from './constants.js';
 import { CustomerSearch } from './components/CustomerSearch.js';
 import { ItemsTable } from './components/ItemsTable.js';
 import { APIService } from './services/APIService.js';
-import { UIHelper } from './utils/UIHelper.js';
+import { UIHelper } from '/static/js/budget/utils/UIHelper.js';
 import { BudgetCalculator } from './utils/Calculator.js';
 
 class BudgetForm {
     constructor() {
         this.initializeForm();
         this.initializeComponents();
+        this.isSubmitting = false;
+        this.setupEventListeners();
     }
 
     initializeForm() {
@@ -23,18 +25,14 @@ class BudgetForm {
         if (statusInput && !statusInput.value) {
             statusInput.value = 'CREATED';
         }
-
-        // Event listeners principais
-        this.form.addEventListener('submit', e => this.handleSubmit(e));
-        this.setupValidation();
     }
 
     initializeComponents() {
         try {
             // Inicializa a tabela de itens
             this.itemsTable = new ItemsTable('items', {
-                onItemAdded: () => this.validateForm(),
-                onItemRemoved: () => this.validateForm(),
+                onItemAdded: () => this.handleItemChange(),
+                onItemRemoved: () => this.handleItemChange(),
                 onTotalsUpdated: totals => this.handleTotalsUpdate(totals)
             });
 
@@ -44,21 +42,25 @@ class BudgetForm {
             console.log('Componentes inicializados com sucesso');
         } catch (error) {
             console.error('Erro ao inicializar componentes:', error);
-            throw error;
+            UIHelper.showError('Erro ao inicializar componentes do formulário', error);
         }
     }
 
-    setupValidation() {
-        // Validação em tempo real dos campos principais
-        const validateInputs = () => this.validateForm();
-        
-        ['material_select', 'quantity_input'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('change', validateInputs);
-                element.addEventListener('input', validateInputs);
-            }
-        });
+    setupEventListeners() {
+        // Event listener para submissão do formulário
+        this.form.addEventListener('submit', e => this.handleSubmit(e));
+
+        // Event listener para cancelamento
+        const cancelButton = this.form.querySelector('.btn-secondary');
+        if (cancelButton) {
+            cancelButton.addEventListener('click', () => this.handleCancel());
+        }
+
+        // Event listeners para campos que afetam a validação
+        const customerInput = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT);
+        if (customerInput) {
+            customerInput.addEventListener('change', () => this.validateForm());
+        }
     }
 
     handleCustomerSelection(customerData) {
@@ -84,11 +86,14 @@ class BudgetForm {
             }
         });
 
-        // Atualiza o estado do formulário
-        this.validateForm();
-
-        // Exibe feedback visual
         UIHelper.showSuccess(`Cliente ${customerData.name} selecionado com sucesso`);
+        document.querySelector('.customer-info').style.display = 'block';
+    }
+
+    handleItemChange() {
+        if (this.isSubmitting) {
+            this.validateForm();
+        }
     }
 
     handleTotalsUpdate(totals) {
@@ -105,16 +110,20 @@ class BudgetForm {
         updateTotal('grand_total', totals.valueTotal);
 
         // Atualiza os inputs hidden
-        const updateHiddenInput = (id, value) => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.value = value.toFixed(2);
+        const updateHiddenInput = (name, value) => {
+            let input = this.form.querySelector(`input[name="${name}"]`);
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                this.form.appendChild(input);
             }
+            input.value = value.toFixed(2);
         };
 
-        updateHiddenInput('budget_value', totals.value);
-        updateHiddenInput('budget_tax_value', totals.taxValue);
-        updateHiddenInput('budget_value_total', totals.valueTotal);
+        updateHiddenInput('value', totals.value);
+        updateHiddenInput('tax_value', totals.taxValue);
+        updateHiddenInput('value_total', totals.valueTotal);
     }
 
     validateForm() {
@@ -128,10 +137,13 @@ class BudgetForm {
             isValid = false;
         }
 
-        // Validação dos itens
-        if (!this.itemsTable?.validate()) {
-            errors.push('Verifique os itens do orçamento');
-            isValid = false;
+        // Validação dos itens apenas durante a submissão
+        if (this.isSubmitting && this.itemsTable) {
+            const items = this.itemsTable.getItems();
+            if (items.length === 0) {
+                errors.push('Adicione pelo menos um item ao orçamento');
+                isValid = false;
+            }
         }
 
         // Atualiza estado dos botões e campos
@@ -151,27 +163,30 @@ class BudgetForm {
 
     async handleSubmit(event) {
         event.preventDefault();
+        this.isSubmitting = true;
 
         try {
             if (!this.validateForm()) {
                 return;
             }
 
-            const formData = new FormData(this.form);
-            
-            // Adiciona o status se não estiver presente
-            if (!formData.get('status')) {
-                formData.append('status', 'CREATED');
+            // Habilita validação da tabela de itens
+            if (this.itemsTable) {
+                this.itemsTable.enableValidation();
+                
+                const items = this.itemsTable.getItems();
+                if (items.length === 0) {
+                    UIHelper.showError('Adicione pelo menos um item ao orçamento');
+                    return;
+                }
             }
 
-            // Exibe indicador de carregamento
             UIHelper.showLoading('Salvando orçamento...');
-
+            const formData = new FormData(this.form);
             const response = await APIService.submitBudget(formData);
 
             if (response.success) {
                 UIHelper.showSuccess('Orçamento salvo com sucesso!');
-                // Redireciona após um breve delay para mostrar a mensagem de sucesso
                 setTimeout(() => {
                     window.location.href = '/budgets/';
                 }, 1000);
@@ -187,6 +202,16 @@ class BudgetForm {
             }
         } finally {
             UIHelper.hideLoading();
+            this.isSubmitting = false;
+            if (this.itemsTable) {
+                this.itemsTable.disableValidation();
+            }
+        }
+    }
+
+    handleCancel() {
+        if (confirm('Tem certeza que deseja cancelar? Todas as alterações serão perdidas.')) {
+            window.location.href = '/budgets/';
         }
     }
 
@@ -194,29 +219,46 @@ class BudgetForm {
         // Limpa o formulário
         this.form.reset();
 
-        // Reseta componentes
-        this.itemsTable?.reset();
+        // Reseta os componentes
+        if (this.itemsTable) {
+            this.itemsTable.reset();
+        }
         
         // Limpa as informações do cliente
         const elements = [
             SELECTORS.SELECTED_CUSTOMER_NAME,
             SELECTORS.SELECTED_CUSTOMER_PHONE,
-            SELECTORS.SELECTED_CUSTOMER_DOCUMENT,
-            SELECTORS.CUSTOMER_ID_INPUT
+            SELECTORS.SELECTED_CUSTOMER_DOCUMENT
         ];
 
         elements.forEach(selector => {
             const element = document.getElementById(selector);
             if (element) {
-                if (element.tagName === 'INPUT') {
-                    element.value = '';
-                } else {
-                    element.textContent = '';
-                }
+                element.textContent = '';
             }
         });
 
-        // Reseta validação
+        // Limpa o input hidden do cliente
+        const customerIdInput = document.getElementById(SELECTORS.CUSTOMER_ID_INPUT);
+        if (customerIdInput) {
+            customerIdInput.value = '';
+        }
+
+        // Esconde a seção de informações do cliente
+        const customerInfo = document.querySelector('.customer-info');
+        if (customerInfo) {
+            customerInfo.style.display = 'none';
+        }
+
+        // Reseta os totais
+        this.handleTotalsUpdate({
+            value: 0,
+            taxValue: 0,
+            valueTotal: 0
+        });
+
+        // Reseta a validação
+        this.isSubmitting = false;
         this.validateForm();
     }
 }
@@ -232,5 +274,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Exporta a classe para uso externo se necessário
 export default BudgetForm;

@@ -1,0 +1,75 @@
+<!-- templates/budget/budget_pdf.html -->
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Orçamento #{{ budget.pk }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .details {
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Orçamento #{{ budget.pk }}</h1>
+        <p>Data: {{ budget.created_at|date:"d/m/Y" }}</p>
+    </div>
+
+    <div class="details">
+        <h2>Dados do Cliente</h2>
+        <p>Nome: {{ budget.customer.name }}</p>
+        <p>Email: {{ budget.customer.email }}</p>
+        <!-- Adicione outros campos do cliente -->
+    </div>
+
+    <div class="items">
+        <h2>Itens do Orçamento</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Material</th>
+                    <th>Quantidade</th>
+                    <th>Preço Unitário</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in budget.items.all %}
+                <tr>
+                    <td>{{ item.material.name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>R$ {{ item.unit_price }}</td>
+                    <td>R$ {{ item.subtotal }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="total">
+        <h2>Total</h2>
+        <p>Total do Orçamento: R$ {{ budget.total }}</p>
+    </div>
+</body>
+</html>

@@ -31,6 +31,9 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 import json
+from django.views.generic.edit import DeleteView
+from django.urls import reverse_lazy
+from apps.budget.models import Customer
 
 
 def home(request):
@@ -537,67 +540,12 @@ class DashboardView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # Se você estava fazendo algo como:
+        # queryset = Material.objects.annotate(total=Sum('cost_value'))
         
-        one_month_ago = timezone.now() - timedelta(days=30)
-
-        # 1. Orçamentos criados
-        created_budgets = Budget.objects.filter(created_at__gte=one_month_ago, enabled=True)
-        context['created_count'] = created_budgets.count()
-        context['created_total'] = created_budgets.aggregate(
-            total=Sum(F('items__quantity') * F('items__material__cost_value'))
-        )['total'] or 0
-
-        # 2. Orçamentos aceitos
-        accepted_statuses = ['ACCEPTED', 'SERVICE_ORDER', 'SCHEDULED']
-        accepted_budgets = Budget.objects.filter(
-            created_at__gte=one_month_ago,
-            enabled=True,
-            status__in=accepted_statuses
-        )
-        context['accepted_count'] = accepted_budgets.count()
-        context['accepted_total'] = accepted_budgets.aggregate(
-            total=Sum(F('items__quantity') * F('items__material__cost_value'))
-        )['total'] or 0
-
-        # 3. Total Faturado
-        faturado_statuses = ['SERVICE_ORDER', 'SCHEDULED']
-        faturado_budgets = Budget.objects.filter(
-            created_at__gte=one_month_ago,
-            enabled=True,
-            status__in=faturado_statuses
-        )
-        context['faturado_total'] = faturado_budgets.aggregate(
-            total=Sum(F('items__quantity') * F('items__material__cost_value'))
-        )['total'] or 0
-
-        # 4. Comparação de Orçamentos (Time Series)
-        base_series = Budget.objects.filter(
-            created_at__gte=one_month_ago,
-            enabled=True
-        ).annotate(date=TruncDate('created_at')).values('date').annotate(count=Count('id')).order_by('date')
-
-        status_series = {
-            'PENDING': [],
-            'SENT': [],
-            'ACCEPTED': [],
-            'SERVICE_ORDER': [],
-            'SCHEDULED': []
-        }
-
-        for status in status_series.keys():
-            status_data = Budget.objects.filter(
-                created_at__gte=one_month_ago,
-                enabled=True,
-                status=status
-            ).annotate(date=TruncDate('created_at')).values('date').annotate(count=Count('id')).order_by('date')
-            
-            status_series[status] = list(status_data)
-
-        context['time_series_data'] = {
-            'base': list(base_series),
-            'status_series': status_series
-        }
-
+        # Mude para usar um campo que existe, como 'price_list' ou 'prices'
+        queryset = Material.objects.all()  # ajuste conforme necessário
+        context['materials'] = queryset
         return context
     
 class BudgetForm(forms.ModelForm):
@@ -981,3 +929,55 @@ def get_material_current_price(request, material_id):
             'success': False,
             'error': str(e)
         })
+    
+
+
+class BudgetDeleteView(DeleteView):
+    model = Budget
+    success_url = reverse_lazy('budget_list')  # ajuste para o nome da sua URL de listagem
+    template_name = 'budget/budget_confirm_delete.html'  # crie este template
+
+
+# apps/budget/views.py
+from django.views.generic import View
+from django.http import HttpResponse
+from django.template.loader import get_template
+from django.shortcuts import get_object_or_404
+# Você precisará instalar: pip install xhtml2pdf
+from xhtml2pdf import pisa
+from io import BytesIO
+from .models import Budget
+
+class BudgetPDFView(View):
+    def get(self, request, *args, **kwargs):
+        # Obtém o orçamento específico
+        budget = get_object_or_404(Budget, pk=kwargs['pk'])
+        
+        # Carrega o template
+        template = get_template('budget/budget_pdf.html')
+        
+        # Contexto para o template
+        context = {
+            'budget': budget,
+            # Adicione outras variáveis de contexto necessárias
+        }
+        
+        # Renderiza o template HTML
+        html = template.render(context)
+        
+        # Cria o arquivo PDF
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="orcamento_{budget.pk}.pdf"'
+        
+        # Gera o PDF
+        buffer = BytesIO()
+        pdf = pisa.CreatePDF(html, dest=buffer)
+        
+        if not pdf.err:
+            # Se tudo OK, retorna o PDF
+            pdf_data = buffer.getvalue()
+            buffer.close()
+            response.write(pdf_data)
+            return response
+            
+        return HttpResponse('Erro ao gerar PDF', status=400)

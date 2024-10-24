@@ -1,21 +1,48 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+import sys
+
+# Adiciona o diretório 'apps' ao PYTHONPATH
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, 'customerbudget', 'apps'))
+
+
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv()
+
+# Configurações da empresa
+COMPANY_NAME = os.getenv('COMPANY_NAME')
+DOCUMENT_TYPE = os.getenv('DOCUMENT_TYPE')
+DOCUMENT_NUMBER = os.getenv('DOCUMENT_NUMBER')
+RESPONSIBLE = os.getenv('RESPONSIBLE')
+CONTACT = os.getenv('CONTACT')
+ADDRESS = os.getenv('ADDRESS')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+APPS_DIR = os.path.join(BASE_DIR, 'apps')
+sys.path.insert(0, APPS_DIR)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-your-secret-key'
+# Adicione a pasta 'apps' ao Python path
+sys.path.insert(0, str(BASE_DIR / 'apps'))
+# ... outras configurações ...
 
-# SECURITY WARNING: don't run with debug turned on in production!
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Adicione esta configuração para o diretório de mídia
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+SECRET_KEY = 'your-secret-key-here'
+
 DEBUG = True
 
 ALLOWED_HOSTS = []
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -23,15 +50,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Apps locais
-    'apps.budget.apps.BudgetConfig',
-    #'apps.budget',  # Simplificado
+    'rest_framework',
+    'corsheaders',
+    # Adicione seus apps aqui
+    'apps.budget.apps.BudgetConfig',  # Certifique-se que está exatamente assim
+    #'app_label' = 'budget',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -59,18 +88,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'customerbudget.wsgi.application'
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -88,40 +111,18 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
 LANGUAGE_CODE = 'pt-br'
 TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
-# Media files
-MEDIA_URL = 'media/'
+MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Configurações para o sistema de orçamentos
-COMPANY_NAME = "Sua Empresa"
-DOCUMENT_TYPE = "CNPJ"
-DOCUMENT_NUMBER = "XX.XXX.XXX/0001-XX"
-RESPONSIBLE = "Nome do Responsável"
-CONTACT = "contato@suaempresa.com"
-ADDRESS = "Endereço da Empresa"
-
-# Python path configuration
-import sys
-APPS_DIR = os.path.join(BASE_DIR, 'apps')
-sys.path.insert(0, APPS_DIR)
+CORS_ALLOW_ALL_ORIGINS = True  # Você pode querer restringir isso em produção
